@@ -1,0 +1,29 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>NetCoreBackend.NArchitecture.$(AssemblyName)</RootNamespace>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <PackageId>NetCoreBackend.NArchitecture.$(AssemblyName)</PackageId>
+    <Version>1.0.0</Version>
+    <Title>NetCoreBackend NArchitecture $(AssemblyName)</Title>
+    <Description>Provides utilities for integrating persistence services with ASP.NET Web API
+      projects.</Description>
+    <Product>NetCoreBackend NArchitecture</Product>
+    <Authors>Caner Demirkol, Contributors</Authors>
+    <Company></Company>
+       <PackageTags>Clean Architecture, Union Architecture, Core, NArchitecture, Persistence, Data
+      Access, Web API, ASP.NET, Repository Pattern, Unit of Work, Database, ORM, NoSQL, Relational,
+      File System, Migration, Tools</PackageTags>
+    <PackageIcon></PackageIcon>
+    <RepositoryUrl></RepositoryUrl>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Http.Extensions"  />
+    <PackageReference Include="System.Text.Encodings.Web" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Core.Persistence\Core.Persistence.csproj" />
+  </ItemGroup>
+</Project>
