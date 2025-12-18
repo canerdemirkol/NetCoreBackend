@@ -35,7 +35,10 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Core.Translation.AmazonTran
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Core.Persistence.WebApi", "Core.Persistence.WebApi\Core.Persistence.WebApi.csproj", "{8922C45F-4E06-4CCC-B032-588A0D5C174D}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{349CE34D-A942-422C-943A-DE4BEC1E39B3}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{089100B1-113F-4E66-888A-E83F3999EAFD}"
+	ProjectSection(SolutionItems) = preProject
+		Directory.Packages.props = Directory.Packages.props
+	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Core.CrossCuttingConcerns.Logging", "Core.CrossCuttingConcerns.Logging\Core.CrossCuttingConcerns.Logging.csproj", "{339167F8-A34B-424F-8E93-117B81DB7D1C}"
 EndProject
