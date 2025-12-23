@@ -6,9 +6,12 @@ public class UserForLoginDto : IDto
 {
     public required string Email { get; set; }
 
-    [JsonIgnore]
-    public string Password { get; set; }
 
+    public required string Password { get; set; }
+    /// <summary>
+    /// 2FA kodu. İlk login denemesinde boş gönderin.
+    /// Eğer response'da RequiredAuthenticatorType dönerse, ikinci denemede bu kodu gönderin.
+    /// </summary>
     [JsonIgnore]
     public string? AuthenticatorCode { get; set; }
 
