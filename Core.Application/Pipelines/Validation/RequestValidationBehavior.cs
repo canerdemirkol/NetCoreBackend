@@ -21,7 +21,7 @@ public class RequestValidationBehavior<TRequest, TResponse> : IPipelineBehavior<
         CancellationToken cancellationToken
     )
     {
-        ValidationContext<object> context = new(request);
+        ValidationContext<TRequest> context = new(request);
         IEnumerable<ValidationExceptionModel> errors = _validators
             .Select(validator => validator.Validate(context))
             .SelectMany(result => result.Errors)

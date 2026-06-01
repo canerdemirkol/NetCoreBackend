@@ -29,7 +29,7 @@ public class JwtHelper<TUserId, TOperationClaimId, TRefreshTokenId> : ITokenHelp
         {
             UserId = user.Id,
             Token = RandomRefreshToken(),
-            ExpirationDate = DateTime.UtcNow.AddDays(_tokenOptions.RefreshTokenTTL),
+            ExpirationDate = DateTime.UtcNow.AddDays(_tokenOptions.RefreshTokenTtlDays),
             CreatedByIp = ipAddress
         };
     }

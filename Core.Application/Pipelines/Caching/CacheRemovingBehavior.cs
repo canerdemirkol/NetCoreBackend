@@ -50,7 +50,7 @@ public class CacheRemovingBehavior<TRequest, TResponse> : IPipelineBehavior<TReq
                 if (cachedGroup != null)
                 {
                     HashSet<string> keysInGroup = JsonSerializer.Deserialize<HashSet<string>>(
-                        Encoding.Default.GetString(cachedGroup)
+                        Encoding.UTF8.GetString(cachedGroup)
                     )!;
                     foreach (string key in keysInGroup)
                     {

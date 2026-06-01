@@ -25,7 +25,10 @@ public class LoggingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, 
         CancellationToken cancellationToken
     )
     {
-        List<LogParameter> logParameters = [new LogParameter { Type = request.GetType().Name, Value = request }];
+        // Requests marked ISensitiveRequest log only the type name — the body may contain
+        // passwords, tokens, or PII that must not be persisted to log storage.
+        object payload = request is ISensitiveRequest ? "[redacted]" : request;
+        List<LogParameter> logParameters = [new LogParameter { Type = request.GetType().Name, Value = payload }];
 
         Guid? tenantId = _httpContextAccessor.HttpContext?.User.GetTenantId();
 

@@ -35,9 +35,14 @@ public class ElasticSearchManager : IElasticSearch
     public async Task<IElasticSearchResult> InsertManyAsync(string indexName, object[] items)
     {
         ElasticClient elasticClient = getElasticClient(indexName);
-        await elasticClient.BulkAsync(a => a.Index(indexName).IndexMany(items));
+        BulkResponse response = await elasticClient.BulkAsync(a => a.Index(indexName).IndexMany(items));
 
-        return new ElasticSearchResult();
+        return new ElasticSearchResult(
+            response.IsValid,
+            message: response.IsValid
+                ? ElasticSearchMessages.Success
+                : response.ServerError?.Error?.Reason ?? response.DebugInformation
+        );
     }
 
     public async Task<IElasticSearchResult> CreateNewIndexAsync(IndexModel indexModel)
@@ -55,7 +60,7 @@ public class ElasticSearchManager : IElasticSearch
 
         return new ElasticSearchResult(
             response.IsValid,
-            message: response.IsValid ? ElasticSearchMessages.Success : response.ServerError.Error.Reason
+            message: response.IsValid ? ElasticSearchMessages.Success : response.ServerError?.Error?.Reason ?? response.DebugInformation
         );
     }
 
@@ -68,7 +73,7 @@ public class ElasticSearchManager : IElasticSearch
         );
         return new ElasticSearchResult(
             response.IsValid,
-            message: response.IsValid ? ElasticSearchMessages.Success : response.ServerError.Error.Reason
+            message: response.IsValid ? ElasticSearchMessages.Success : response.ServerError?.Error?.Reason ?? response.DebugInformation
         );
     }
 
@@ -143,7 +148,7 @@ public class ElasticSearchManager : IElasticSearch
 
         return new ElasticSearchResult(
             response.IsValid,
-            message: response.IsValid ? ElasticSearchMessages.Success : response.ServerError.Error.Reason
+            message: response.IsValid ? ElasticSearchMessages.Success : response.ServerError?.Error?.Reason ?? response.DebugInformation
         );
     }
 
@@ -156,7 +161,7 @@ public class ElasticSearchManager : IElasticSearch
         );
         return new ElasticSearchResult(
             response.IsValid,
-            message: response.IsValid ? ElasticSearchMessages.Success : response.ServerError.Error.Reason
+            message: response.IsValid ? ElasticSearchMessages.Success : response.ServerError?.Error?.Reason ?? response.DebugInformation
         );
     }
 

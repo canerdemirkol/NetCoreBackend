@@ -24,6 +24,8 @@ public static class HashingHelper
         using HMACSHA512 hmac = new(passwordSalt);
 
         byte[] computedHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(password));
-        return computedHash.SequenceEqual(passwordHash);
+        // FixedTimeEquals runs in O(len) regardless of where the first byte differs —
+        // SequenceEqual short-circuits and leaks hash bytes through response timing.
+        return CryptographicOperations.FixedTimeEquals(computedHash, passwordHash);
     }
 }

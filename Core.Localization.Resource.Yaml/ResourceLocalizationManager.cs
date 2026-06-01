@@ -12,6 +12,9 @@ public class ResourceLocalizationManager : ILocalizationService
 
     // <locale, <section, <path, content>>>
     private readonly Dictionary<string, Dictionary<string, (string path, YamlMappingNode? content)>> _resourceData = [];
+    // Per-instance lock prevents the same YAML file from being parsed twice when
+    // multiple requests miss the cache simultaneously.
+    private readonly object _loadLock = new();
 
     public ResourceLocalizationManager(Dictionary<string, Dictionary<string, string>> resources)
     {
@@ -59,20 +62,44 @@ public class ResourceLocalizationManager : ILocalizationService
         )
         {
             if (sectionNode.content is null)
-                lazyLoadResource(sectionNode.path, out sectionNode.content);
+            {
+                lock (_loadLock)
+                {
+                    // Double-check after acquiring the lock: another thread may have loaded it.
+                    sectionNode = cultureNode[keySection];
+                    if (sectionNode.content is null)
+                    {
+                        YamlMappingNode? loaded = lazyLoadResource(sectionNode.path);
+                        sectionNode = (sectionNode.path, loaded);
+                        cultureNode[keySection] = sectionNode;
+                    }
+                }
+            }
 
-            if (sectionNode.content!.Children.TryGetValue(new YamlScalarNode(key), out YamlNode? cultureValueNode))
+            if (sectionNode.content is not null
+                && sectionNode.content.Children.TryGetValue(new YamlScalarNode(key), out YamlNode? cultureValueNode))
                 return cultureValueNode.ToString();
         }
 
         return null;
     }
 
-    private void lazyLoadResource(string path, out YamlMappingNode? content)
+    private static YamlMappingNode? lazyLoadResource(string path)
     {
+        if (!File.Exists(path))
+            throw new FileNotFoundException($"Localization resource file not found: {path}", path);
+
         using StreamReader reader = new(path);
         YamlStream yamlStream = [];
         yamlStream.Load(reader);
-        content = (YamlMappingNode)yamlStream.Documents[0].RootNode;
+
+        if (yamlStream.Documents.Count == 0)
+            return null;   // empty file — caller treats missing content as "key not found"
+
+        if (yamlStream.Documents[0].RootNode is not YamlMappingNode mapping)
+            throw new InvalidOperationException(
+                $"Localization resource file '{path}' is not a YAML mapping at the root.");
+
+        return mapping;
     }
 }

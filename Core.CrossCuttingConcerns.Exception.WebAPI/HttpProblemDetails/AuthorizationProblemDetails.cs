@@ -10,6 +10,6 @@ public class AuthorizationProblemDetails : ProblemDetails
         Title = "Authorization error";
         Detail = detail;
         Status = StatusCodes.Status401Unauthorized;
-        Type = "https://example.com/probs/authorization";
+        Type = "about:blank";
     }
 }

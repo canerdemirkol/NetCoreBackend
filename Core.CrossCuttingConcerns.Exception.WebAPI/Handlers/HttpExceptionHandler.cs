@@ -49,7 +49,9 @@ public class HttpExceptionHandler : ExceptionHandler
     public override Task HandleException(System.Exception exception)
     {
         Response.StatusCode = StatusCodes.Status500InternalServerError;
-        string details = new InternalServerErrorProblemDetails(exception.Message).ToJson();
+        // Do not surface exception.Message — DB/internal errors can leak schema info.
+        // Full details are logged server-side via ExceptionMiddleware.
+        string details = new InternalServerErrorProblemDetails().ToJson();
         return Response.WriteAsync(details);
     }
 }

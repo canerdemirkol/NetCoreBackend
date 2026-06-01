@@ -12,19 +12,12 @@ public class TransactionScopeBehavior<TRequest, TResponse> : IPipelineBehavior<T
         CancellationToken cancellationToken
     )
     {
+        // The `using` declaration handles rollback automatically: if Complete() is not reached
+        // (because next() or Complete() itself throws), Dispose rolls back. The previous explicit
+        // Dispose() in a catch block duplicated the rollback and obscured the intent.
         using TransactionScope transactionScope = new(TransactionScopeAsyncFlowOption.Enabled);
-        TResponse response;
-        try
-        {
-            response = await next();
-            transactionScope.Complete();
-        }
-        catch (Exception)
-        {
-            transactionScope.Dispose();
-            throw;
-        }
-
+        TResponse response = await next();
+        transactionScope.Complete();
         return response;
     }
 }

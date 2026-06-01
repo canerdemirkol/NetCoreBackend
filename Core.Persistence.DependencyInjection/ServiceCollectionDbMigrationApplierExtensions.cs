@@ -6,20 +6,18 @@ namespace NetCoreBackend.NArchitecture.Core.Persistence.DependencyInjection;
 
 public static class ServiceCollectionDbMigrationApplierExtensions
 {
-    public static IServiceCollection AddDbMigrationApplier<TDbContext>(
-        this IServiceCollection services,
-        Func<ServiceProvider, TDbContext> contextFactory
-    )
+    // The previous implementation called services.BuildServiceProvider() at registration time —
+    // an ASP0000 anti-pattern that creates a parallel service tree, leaks the temp provider
+    // (never disposed), and uses a DbContext detached from the runtime DI graph. The factories
+    // below resolve TDbContext from the real ServiceProvider at the time UseDbMigrationApplier()
+    // is invoked, so migrations run against the app's actual context with the right lifetime.
+    public static IServiceCollection AddDbMigrationApplier<TDbContext>(this IServiceCollection services)
         where TDbContext : DbContext
     {
-        ServiceProvider buildServiceProvider = services.BuildServiceProvider();
-
-        _ = services.AddTransient<IDbMigrationApplierService, DbMigrationApplierManager<TDbContext>>(
-            _ => new DbMigrationApplierManager<TDbContext>(contextFactory(buildServiceProvider))
-        );
-        _ = services.AddTransient<IDbMigrationApplierService<TDbContext>, DbMigrationApplierManager<TDbContext>>(
-            _ => new DbMigrationApplierManager<TDbContext>(contextFactory(buildServiceProvider))
-        );
+        services.AddTransient<IDbMigrationApplierService>(sp =>
+            new DbMigrationApplierManager<TDbContext>(sp.GetRequiredService<TDbContext>()));
+        services.AddTransient<IDbMigrationApplierService<TDbContext>>(sp =>
+            new DbMigrationApplierManager<TDbContext>(sp.GetRequiredService<TDbContext>()));
 
         return services;
     }

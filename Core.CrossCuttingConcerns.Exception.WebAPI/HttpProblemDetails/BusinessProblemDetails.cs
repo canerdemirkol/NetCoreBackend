@@ -10,6 +10,7 @@ public class BusinessProblemDetails : ProblemDetails
         Title = "Rule violation";
         Detail = detail;
         Status = StatusCodes.Status400BadRequest;
-        Type = "https://example.com/probs/business";
+        // RFC 7807 default — consuming app may override with a domain-specific URI.
+        Type = "about:blank";
     }
 }

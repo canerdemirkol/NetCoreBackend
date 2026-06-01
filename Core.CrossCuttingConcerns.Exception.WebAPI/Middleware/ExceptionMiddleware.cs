@@ -37,7 +37,8 @@ public class ExceptionMiddleware
 
     protected virtual Task HandleExceptionAsync(HttpResponse response, dynamic exception)
     {
-        response.ContentType = MediaTypeNames.Application.Json;
+        // RFC 7807 recommends application/problem+json; explicit charset prevents UTF-8 ambiguity.
+        response.ContentType = "application/problem+json; charset=utf-8";
         _httpExceptionHandler.Response = response;
 
         return _httpExceptionHandler.HandleException(exception);

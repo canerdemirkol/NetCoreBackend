@@ -13,22 +13,30 @@ public class SerilogFileLogger : SerilogLoggerServiceBase
         // Use AppContext.BaseDirectory instead of Directory.GetCurrentDirectory() for IIS compatibility
         string baseDirectory = AppContext.BaseDirectory;
 
-        // Normalize FolderPath with fallback - remove leading/trailing slashes and backslashes
+        // Normalize FolderPath with fallback - remove leading/trailing slashes and backslashes.
+        // Also reject path traversal sequences and absolute paths — user-supplied config
+        // could otherwise write logs outside the application directory.
         string normalizedFolderPath = !string.IsNullOrWhiteSpace(configuration?.FolderPath)
             ? configuration.FolderPath.Trim('/', '\\')
             : "logs";
+
+        if (normalizedFolderPath.Contains("..", StringComparison.Ordinal)
+            || Path.IsPathRooted(normalizedFolderPath))
+            throw new ArgumentException(
+                $"FileLogConfiguration.FolderPath '{normalizedFolderPath}' is not allowed: " +
+                "path traversal ('..') and absolute paths are rejected.",
+                nameof(configuration));
 
         // Parse minimum log level with fallback
         LogEventLevel minLogLevel = LogEventLevel.Debug;
         if (!string.IsNullOrWhiteSpace(configuration?.MinLogLevel))
         {
-            try
+            if (!Enum.TryParse(configuration.MinLogLevel, ignoreCase: true, out minLogLevel))
             {
-                minLogLevel = (LogEventLevel)Enum.Parse(typeof(LogEventLevel), configuration.MinLogLevel, ignoreCase: true);
-            }
-            catch
-            {
-                minLogLevel = LogEventLevel.Debug; // Fallback to Debug if parsing fails
+                // Surface the misconfiguration to first-chance debug listeners instead of swallowing silently
+                System.Diagnostics.Debug.WriteLine(
+                    $"[SerilogFileLogger] Unknown MinLogLevel '{configuration.MinLogLevel}', falling back to Debug.");
+                minLogLevel = LogEventLevel.Debug;
             }
         }
 

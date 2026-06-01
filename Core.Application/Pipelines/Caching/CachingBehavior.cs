@@ -50,7 +50,7 @@ public class CachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, 
         byte[]? cachedResponse = await _cache.GetAsync(cacheKey, cancellationToken);
         if (cachedResponse != null)
         {
-            response = JsonSerializer.Deserialize<TResponse>(Encoding.Default.GetString(cachedResponse))!;
+            response = JsonSerializer.Deserialize<TResponse>(Encoding.UTF8.GetString(cachedResponse))!;
             _logger.LogInformation($"Fetched from Cache -> {cacheKey}");
         }
         else
@@ -88,7 +88,7 @@ public class CachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, 
         HashSet<string> cacheKeysInGroup;
         if (cacheGroupCache != null)
         {
-            cacheKeysInGroup = JsonSerializer.Deserialize<HashSet<string>>(Encoding.Default.GetString(cacheGroupCache))!;
+            cacheKeysInGroup = JsonSerializer.Deserialize<HashSet<string>>(Encoding.UTF8.GetString(cacheGroupCache))!;
             if (!cacheKeysInGroup.Contains(cacheKey))
                 cacheKeysInGroup.Add(cacheKey);
         }
@@ -103,7 +103,7 @@ public class CachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, 
         int? cacheGroupCacheSlidingExpirationValue = null;
         if (cacheGroupCacheSlidingExpirationCache != null)
             cacheGroupCacheSlidingExpirationValue = Convert.ToInt32(
-                Encoding.Default.GetString(cacheGroupCacheSlidingExpirationCache)
+                Encoding.UTF8.GetString(cacheGroupCacheSlidingExpirationCache)
             );
         if (
             cacheGroupCacheSlidingExpirationValue == null

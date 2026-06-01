@@ -10,8 +10,9 @@ public class Paginate<T> : IPaginate<T>
         Index = index;
         Size = size;
         From = from;
-        Pages = (int)Math.Ceiling(Count / (double)Size);
 
+        // Count must be assigned BEFORE Pages — otherwise Pages = ceil(0 / Size) = 0
+        // and HasNext is always false (regression: pagination metadata broken).
         if (source is IQueryable<T> queryable)
         {
             Count = queryable.Count();
@@ -20,9 +21,11 @@ public class Paginate<T> : IPaginate<T>
         else
         {
             T[] enumerable = source as T[] ?? source.ToArray();
-            Count = enumerable.Count();
+            Count = enumerable.Length;
             Items = enumerable.Skip((Index - From) * Size).Take(Size).ToList();
         }
+
+        Pages = Size > 0 ? (int)Math.Ceiling(Count / (double)Size) : 0;
     }
 
     public Paginate()
@@ -56,7 +59,6 @@ public class Paginate<TSource, TResult> : IPaginate<TResult>
         Index = index;
         Size = size;
         From = from;
-        Pages = (int)Math.Ceiling(Count / (double)Size);
 
         if (source is IQueryable<TSource> queryable)
         {
@@ -67,10 +69,12 @@ public class Paginate<TSource, TResult> : IPaginate<TResult>
         else
         {
             TSource[] enumerable = source as TSource[] ?? source.ToArray();
-            Count = enumerable.Count();
+            Count = enumerable.Length;
             TSource[] items = enumerable.Skip((Index - From) * Size).Take(Size).ToArray();
             Items = new List<TResult>(converter(items));
         }
+
+        Pages = Size > 0 ? (int)Math.Ceiling(Count / (double)Size) : 0;
     }
 
     public Paginate(IPaginate<TSource> source, Func<IEnumerable<TSource>, IEnumerable<TResult>> converter)

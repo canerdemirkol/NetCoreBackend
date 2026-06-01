@@ -8,12 +8,10 @@ public class PerformanceBehavior<TRequest, TResponse> : IPipelineBehavior<TReque
     where TRequest : IRequest<TResponse>, IIntervalRequest
 {
     private readonly ILogger<PerformanceBehavior<TRequest, TResponse>> _logger;
-    private readonly Stopwatch _stopwatch;
 
-    public PerformanceBehavior(ILogger<PerformanceBehavior<TRequest, TResponse>> logger, Stopwatch stopwatch)
+    public PerformanceBehavior(ILogger<PerformanceBehavior<TRequest, TResponse>> logger)
     {
         _logger = logger;
-        _stopwatch = stopwatch;
     }
 
     public async Task<TResponse> Handle(
@@ -24,26 +22,23 @@ public class PerformanceBehavior<TRequest, TResponse> : IPipelineBehavior<TReque
     {
         string requestName = request.GetType().Name;
 
-        TResponse response;
-
+        // Local stopwatch per invocation: avoids shared-instance corruption if a
+        // single Stopwatch was previously registered in DI (singleton/scoped would
+        // interleave measurements across concurrent requests).
+        Stopwatch stopwatch = Stopwatch.StartNew();
         try
         {
-            _stopwatch.Start();
-            response = await next();
+            return await next();
         }
         finally
         {
-            if (_stopwatch.Elapsed.TotalSeconds > request.Interval)
+            stopwatch.Stop();
+            if (stopwatch.Elapsed.TotalSeconds > request.Interval)
             {
-                string message = $"Performance -> {requestName} {_stopwatch.Elapsed.TotalSeconds} s";
-
+                string message = $"Performance -> {requestName} {stopwatch.Elapsed.TotalSeconds} s";
                 Debug.WriteLine(message);
                 _logger.LogInformation(message);
             }
-
-            _stopwatch.Restart();
         }
-
-        return response;
     }
 }

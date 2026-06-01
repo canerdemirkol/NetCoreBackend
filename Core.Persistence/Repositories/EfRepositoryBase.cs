@@ -103,6 +103,23 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
             GuardTenantOwnership(entity);
     }
 
+    // Rejects update/delete attempts on entities whose Id is still the type default
+    // (Guid.Empty for Guid, 0 for int, null for ref types). EF Core would otherwise issue
+    // `WHERE Id = @default` and either fail or touch the wrong row.
+    private static void GuardValidId(TEntity entity)
+    {
+        if (EqualityComparer<TEntityId>.Default.Equals(entity.Id, default!))
+            throw new InvalidOperationException(
+                $"Cannot operate on entity '{typeof(TEntity).Name}' with a default/empty Id. " +
+                "Load the entity first or set a valid Id before calling Update/Delete.");
+    }
+
+    private static void GuardValidId(IEnumerable<TEntity> entities)
+    {
+        foreach (TEntity entity in entities)
+            GuardValidId(entity);
+    }
+
     protected virtual void EditEntityPropertiesToAdd(TEntity entity)
     {
         entity.CreatedDate = DateTime.UtcNow;
@@ -137,6 +154,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
 
     public async Task<TEntity> UpdateAsync(TEntity entity, CancellationToken cancellationToken = default)
     {
+        GuardValidId(entity);
         GuardTenantOwnership(entity);
         EditEntityPropertiesToUpdate(entity);
         Context.Update(entity);
@@ -149,6 +167,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
         CancellationToken cancellationToken = default
     )
     {
+        GuardValidId(entities);
         GuardTenantOwnership(entities);
         foreach (TEntity entity in entities)
             EditEntityPropertiesToUpdate(entity);
@@ -159,6 +178,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
 
     public async Task<TEntity> DeleteAsync(TEntity entity, bool permanent = false, CancellationToken cancellationToken = default)
     {
+        GuardValidId(entity);
         GuardTenantOwnership(entity);
         await SetEntityAsDeleted(entity, permanent, isAsync: true, cancellationToken);
         await Context.SaveChangesAsync(cancellationToken);
@@ -171,6 +191,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
         CancellationToken cancellationToken = default
     )
     {
+        GuardValidId(entities);
         GuardTenantOwnership(entities);
         await SetEntityAsDeleted(entities, permanent, isAsync: true, cancellationToken);
         await Context.SaveChangesAsync(cancellationToken);
@@ -279,6 +300,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
 
     public TEntity Update(TEntity entity)
     {
+        GuardValidId(entity);
         GuardTenantOwnership(entity);
         EditEntityPropertiesToUpdate(entity);
         Context.Update(entity);
@@ -288,6 +310,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
 
     public ICollection<TEntity> UpdateRange(ICollection<TEntity> entities)
     {
+        GuardValidId(entities);
         GuardTenantOwnership(entities);
         foreach (TEntity entity in entities)
             EditEntityPropertiesToUpdate(entity);
@@ -298,6 +321,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
 
     public TEntity Delete(TEntity entity, bool permanent = false)
     {
+        GuardValidId(entity);
         GuardTenantOwnership(entity);
         SetEntityAsDeleted(entity, permanent, isAsync: false).Wait();
         Context.SaveChanges();
@@ -306,6 +330,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
 
     public ICollection<TEntity> DeleteRange(ICollection<TEntity> entities, bool permanent = false)
     {
+        GuardValidId(entities);
         GuardTenantOwnership(entities);
         SetEntityAsDeleted(entities, permanent, isAsync: false).Wait();
         Context.SaveChanges();
@@ -471,9 +496,16 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
         IEntityTimestamps entity,
         bool isAsync = true,
         CancellationToken cancellationToken = default,
-        bool isRoot = true
+        bool isRoot = true,
+        HashSet<object>? visited = null
     )
     {
+        // Cycle protection: navigation graphs can form back-references (A → B → A).
+        // Without a visited set the recursion can stack-overflow on real graphs.
+        visited ??= new HashSet<object>(ReferenceEqualityComparer.Instance);
+        if (!visited.Add(entity))
+            return;
+
         if (IsSoftDeleted(entity))
             return;
         if (isRoot)
@@ -520,7 +552,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
                 }
 
                 foreach (object navValueItem in (IEnumerable)navValue)
-                    await setEntityAsSoftDeleted((IEntityTimestamps)navValueItem, isAsync, cancellationToken, isRoot: false);
+                    await setEntityAsSoftDeleted((IEntityTimestamps)navValueItem, isAsync, cancellationToken, isRoot: false, visited);
             }
             else
             {
@@ -545,10 +577,10 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
                         continue;
                 }
 
-                await setEntityAsSoftDeleted((IEntityTimestamps)navValue, isAsync, cancellationToken, isRoot: false);
+                await setEntityAsSoftDeleted((IEntityTimestamps)navValue, isAsync, cancellationToken, isRoot: false, visited);
             }
         }
 
         Context.Update(entity);
-    } 
+    }
 }

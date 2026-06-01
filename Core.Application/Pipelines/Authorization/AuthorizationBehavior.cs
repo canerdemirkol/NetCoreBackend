@@ -23,16 +23,19 @@ public class AuthorizationBehavior<TRequest, TResponse> : IPipelineBehavior<TReq
         CancellationToken cancellationToken
     )
     {
-        if (!_httpContextAccessor.HttpContext.User.Claims.Any())
+        // HttpContext may be null when the pipeline is invoked outside an HTTP request
+        // (e.g. background jobs, integration tests). Treat as unauthenticated.
+        var user = _httpContextAccessor.HttpContext?.User;
+        if (user is null || !user.Claims.Any())
             throw new AuthorizationException("You are not authenticated.");
 
         // SuperAdmin bypasses all role checks
-        if (_httpContextAccessor.HttpContext.User.IsSuperAdmin())
+        if (user.IsSuperAdmin())
             return await next();
 
         if (request.Roles.Any())
         {
-            ICollection<string>? userRoleClaims = _httpContextAccessor.HttpContext.User.GetRoleClaims() ?? [];
+            ICollection<string>? userRoleClaims = user.GetRoleClaims() ?? [];
 
             // Tenant-level "Admin" bypasses role-specific checks within the tenant — BUT not when
             // the request explicitly requires "SuperAdmin". SuperAdmin gating must remain reachable

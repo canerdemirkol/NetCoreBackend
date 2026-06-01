@@ -39,13 +39,15 @@ Mail mail = new()
     "SenderEmail": "noreply@myapp.com",
     "UserName": "smtp-user",
     "Password": "smtp-password",
-    "UseSsl": false,
+    "AuthenticationRequired": true,
     "DkimPrivateKey": "",
     "DkimSelector": "",
     "DomainName": "myapp.com"
   }
 }
 ```
+
+> SSL/TLS, MailKit'in default `SecureSocketOptions.Auto` davranışıyla port'a göre otomatik belirlenir (port 465 → SSL, 587 → STARTTLS). Açık konfigürasyon istersen `MailKitMailService.emailPrepare` içinde `smtp.Connect(server, port, SecureSocketOptions.X)` çağrısını override et.
 
 ## Implementasyon
 

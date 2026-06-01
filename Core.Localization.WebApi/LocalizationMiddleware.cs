@@ -19,6 +19,7 @@ public class LocalizationMiddleware
     {
         IList<StringWithQualityHeaderValue> acceptLanguages = context.Request.GetTypedHeaders().AcceptLanguage;
         if (acceptLanguages.Count > 0)
+            // x.Value is a StringSegment; ToString() materializes the underlying string.
             localizationService.AcceptLocales = acceptLanguages
                 .OrderByDescending(x => x.Quality ?? 1)
                 .Select(x => x.Value.ToString())

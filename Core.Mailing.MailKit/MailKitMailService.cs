@@ -21,10 +21,19 @@ public class MailKitMailService : IMailService
         if (mail.ToList == null || mail.ToList.Count < 1)
             return;
         emailPrepare(mail, email: out MimeMessage email, smtp: out SmtpClient smtp);
-        smtp.Send(email);
-        smtp.Disconnect(true);
-        email.Dispose();
-        smtp.Dispose();
+        using (email)
+        using (smtp)
+        {
+            try
+            {
+                smtp.Send(email);
+            }
+            finally
+            {
+                if (smtp.IsConnected)
+                    smtp.Disconnect(quit: true);
+            }
+        }
     }
 
     public async Task SendEmailAsync(Mail mail)
@@ -32,10 +41,19 @@ public class MailKitMailService : IMailService
         if (mail.ToList == null || mail.ToList.Count < 1)
             return;
         emailPrepare(mail, email: out MimeMessage email, smtp: out SmtpClient smtp);
-        await smtp.SendAsync(email);
-        smtp.Disconnect(true);
-        email.Dispose();
-        smtp.Dispose();
+        using (email)
+        using (smtp)
+        {
+            try
+            {
+                await smtp.SendAsync(email);
+            }
+            finally
+            {
+                if (smtp.IsConnected)
+                    await smtp.DisconnectAsync(quit: true);
+            }
+        }
     }
 
     private void emailPrepare(Mail mail, out MimeMessage email, out SmtpClient smtp)
@@ -83,16 +101,17 @@ public class MailKitMailService : IMailService
 
     private AsymmetricKeyParameter readPrivateKeyFromPemEncodedString()
     {
-        AsymmetricKeyParameter result;
         string pemEncodedKey =
             "-----BEGIN RSA PRIVATE KEY-----\n" + _mailSettings.DkimPrivateKey + "\n-----END RSA PRIVATE KEY-----";
-        using (StringReader stringReader = new(pemEncodedKey))
-        {
-            PemReader pemReader = new(stringReader);
-            object? pemObject = pemReader.ReadObject();
-            result = ((AsymmetricCipherKeyPair)pemObject).Private;
-        }
+        using StringReader stringReader = new(pemEncodedKey);
+        PemReader pemReader = new(stringReader);
+        object? pemObject = pemReader.ReadObject();
 
-        return result;
+        if (pemObject is not AsymmetricCipherKeyPair keyPair)
+            throw new InvalidOperationException(
+                "DKIM private key could not be parsed as a PEM-encoded RSA key pair. " +
+                "Check MailSettings.DkimPrivateKey for malformed or non-RSA key content.");
+
+        return keyPair.Private;
     }
 }

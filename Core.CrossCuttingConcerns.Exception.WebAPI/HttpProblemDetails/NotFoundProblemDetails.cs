@@ -10,6 +10,6 @@ public class NotFoundProblemDetails : ProblemDetails
         Title = "Not found";
         Detail = detail;
         Status = StatusCodes.Status404NotFound;
-        Type = "https://example.com/probs/notfound";
+        Type = "about:blank";
     }
 }
