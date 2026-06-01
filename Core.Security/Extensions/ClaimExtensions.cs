@@ -1,4 +1,5 @@
 ﻿using System.Security.Claims;
+using NetCoreBackend.NArchitecture.Core.Security.Constants;
 
 namespace NetCoreBackend.NArchitecture.Core.Security.Extensions;
 
@@ -28,5 +29,23 @@ public static class ClaimExtensions
     public static void AddRole(this ICollection<Claim> claims, string role)
     {
         claims.Add(new Claim(ClaimTypes.Role, role));
+    }
+
+    public static void AddTenantId(this ICollection<Claim> claims, Guid? tenantId)
+    {
+        if (tenantId.HasValue)
+            claims.Add(new Claim(TenantClaimTypes.TenantId, tenantId.Value.ToString()));
+    }
+
+    public static void AddIsSuperAdmin(this ICollection<Claim> claims, bool isSuperAdmin)
+    {
+        if (isSuperAdmin)
+            claims.Add(new Claim(TenantClaimTypes.IsSuperAdmin, "true"));
+    }
+
+    public static void AddIsImpersonating(this ICollection<Claim> claims, bool isImpersonating)
+    {
+        if (isImpersonating)
+            claims.Add(new Claim(TenantClaimTypes.IsImpersonating, "true"));
     }
 }

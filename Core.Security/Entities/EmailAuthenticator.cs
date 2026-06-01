@@ -2,7 +2,7 @@
 
 namespace NetCoreBackend.NArchitecture.Core.Security.Entities;
 
-public class EmailAuthenticator<TUserId> : Entity<TUserId>
+public class EmailAuthenticator<TUserId> : TenantEntity<TUserId>
 {
     public TUserId UserId { get; set; }
     public string? ActivationKey { get; set; }

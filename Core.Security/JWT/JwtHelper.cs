@@ -20,16 +20,25 @@ public class JwtHelper<TUserId, TOperationClaimId, TRefreshTokenId> : ITokenHelp
     }
 
     public virtual AccessToken CreateToken(User<TUserId> user, IList<OperationClaim<TOperationClaimId>> operationClaims)
+        => CreateToken(user, operationClaims, tenantId: null, isSuperAdmin: false, isImpersonating: false);
+
+    public virtual AccessToken CreateToken(
+        User<TUserId> user,
+        IList<OperationClaim<TOperationClaimId>> operationClaims,
+        Guid? tenantId,
+        bool isSuperAdmin = false,
+        bool isImpersonating = false)
     {
         DateTime accessTokenExpiration = DateTime.Now.AddMinutes(_tokenOptions.AccessTokenExpiration);
         SecurityKey securityKey = SecurityKeyHelper.CreateSecurityKey(_tokenOptions.SecurityKey);
         SigningCredentials signingCredentials = SigningCredentialsHelper.CreateSigningCredentials(securityKey);
-        JwtSecurityToken jwt = CreateJwtSecurityToken(
-            _tokenOptions,
-            user,
-            signingCredentials,
-            operationClaims,
-            accessTokenExpiration
+        JwtSecurityToken jwt = new JwtSecurityToken(
+            _tokenOptions.Issuer,
+            _tokenOptions.Audience,
+            expires: accessTokenExpiration,
+            notBefore: DateTime.Now,
+            claims: SetClaims(user, operationClaims, tenantId, isSuperAdmin, isImpersonating),
+            signingCredentials: signingCredentials
         );
         JwtSecurityTokenHandler jwtSecurityTokenHandler = new();
         string? token = jwtSecurityTokenHandler.WriteToken(jwt);
@@ -67,11 +76,22 @@ public class JwtHelper<TUserId, TOperationClaimId, TRefreshTokenId> : ITokenHelp
     }
 
     protected virtual IEnumerable<Claim> SetClaims(User<TUserId> user, IList<OperationClaim<TOperationClaimId>> operationClaims)
+        => SetClaims(user, operationClaims, tenantId: null, isSuperAdmin: false, isImpersonating: false);
+
+    protected virtual IEnumerable<Claim> SetClaims(
+        User<TUserId> user,
+        IList<OperationClaim<TOperationClaimId>> operationClaims,
+        Guid? tenantId,
+        bool isSuperAdmin,
+        bool isImpersonating)
     {
         List<Claim> claims = [];
         claims.AddNameIdentifier(user!.Id!.ToString()!);
         claims.AddEmail(user.Email);
         claims.AddRoles(operationClaims.Select(c => c.Name).ToArray());
+        claims.AddTenantId(tenantId);
+        claims.AddIsSuperAdmin(isSuperAdmin);
+        claims.AddIsImpersonating(isImpersonating);
         return claims.ToImmutableList();
     }
 

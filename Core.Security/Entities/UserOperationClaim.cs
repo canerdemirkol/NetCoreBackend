@@ -2,7 +2,7 @@
 
 namespace NetCoreBackend.NArchitecture.Core.Security.Entities;
 
-public class UserOperationClaim<TId, TUserId, TOperationClaimId> : Entity<TId>
+public class UserOperationClaim<TId, TUserId, TOperationClaimId> : TenantEntity<TId>
 {
     public TUserId UserId { get; set; }
     public TOperationClaimId OperationClaimId { get; set; }

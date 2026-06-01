@@ -1,8 +1,10 @@
 ﻿using System.Text;
 using System.Text.Json;
 using MediatR;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
+using NetCoreBackend.NArchitecture.Core.Security.Extensions;
 
 namespace NetCoreBackend.NArchitecture.Core.Application.Pipelines.Caching;
 
@@ -10,12 +12,23 @@ public class CacheRemovingBehavior<TRequest, TResponse> : IPipelineBehavior<TReq
     where TRequest : IRequest<TResponse>, ICacheRemoverRequest
 {
     private readonly IDistributedCache _cache;
+    private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<CacheRemovingBehavior<TRequest, TResponse>> _logger;
 
-    public CacheRemovingBehavior(IDistributedCache cache, ILogger<CacheRemovingBehavior<TRequest, TResponse>> logger)
+    public CacheRemovingBehavior(
+        IDistributedCache cache,
+        IHttpContextAccessor httpContextAccessor,
+        ILogger<CacheRemovingBehavior<TRequest, TResponse>> logger)
     {
         _cache = cache;
+        _httpContextAccessor = httpContextAccessor;
         _logger = logger;
+    }
+
+    private string BuildCacheKey(string baseKey)
+    {
+        Guid? tenantId = _httpContextAccessor.HttpContext?.User.GetTenantId();
+        return tenantId.HasValue ? $"t:{tenantId}:{baseKey}" : baseKey;
     }
 
     public async Task<TResponse> Handle(
@@ -32,7 +45,8 @@ public class CacheRemovingBehavior<TRequest, TResponse> : IPipelineBehavior<TReq
         if (request.CacheGroupKey != null)
             for (int i = 0; i < request.CacheGroupKey.Count(); i++)
             {
-                byte[]? cachedGroup = await _cache.GetAsync(request.CacheGroupKey[i], cancellationToken);
+                string groupKey = BuildCacheKey(request.CacheGroupKey[i]);
+                byte[]? cachedGroup = await _cache.GetAsync(groupKey, cancellationToken);
                 if (cachedGroup != null)
                 {
                     HashSet<string> keysInGroup = JsonSerializer.Deserialize<HashSet<string>>(
@@ -44,17 +58,18 @@ public class CacheRemovingBehavior<TRequest, TResponse> : IPipelineBehavior<TReq
                         _logger.LogInformation($"Removed Cache -> {key}");
                     }
 
-                    await _cache.RemoveAsync(request.CacheGroupKey[i], cancellationToken);
-                    _logger.LogInformation($"Removed Cache -> {request.CacheGroupKey}");
-                    await _cache.RemoveAsync(key: $"{request.CacheGroupKey}SlidingExpiration", cancellationToken);
-                    _logger.LogInformation($"Removed Cache -> {request.CacheGroupKey}SlidingExpiration");
+                    await _cache.RemoveAsync(groupKey, cancellationToken);
+                    _logger.LogInformation($"Removed Cache -> {groupKey}");
+                    await _cache.RemoveAsync(key: $"{groupKey}SlidingExpiration", cancellationToken);
+                    _logger.LogInformation($"Removed Cache -> {groupKey}SlidingExpiration");
                 }
             }
 
         if (request.CacheKey != null)
         {
-            await _cache.RemoveAsync(request.CacheKey, cancellationToken);
-            _logger.LogInformation($"Removed Cache -> {request.CacheKey}");
+            string cacheKey = BuildCacheKey(request.CacheKey);
+            await _cache.RemoveAsync(cacheKey, cancellationToken);
+            _logger.LogInformation($"Removed Cache -> {cacheKey}");
         }
 
         return response;

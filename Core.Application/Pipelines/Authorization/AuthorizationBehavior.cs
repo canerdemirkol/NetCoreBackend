@@ -26,6 +26,10 @@ public class AuthorizationBehavior<TRequest, TResponse> : IPipelineBehavior<TReq
         if (!_httpContextAccessor.HttpContext.User.Claims.Any())
             throw new AuthorizationException("You are not authenticated.");
 
+        // SuperAdmin bypasses all role checks
+        if (_httpContextAccessor.HttpContext.User.IsSuperAdmin())
+            return await next();
+
         if (request.Roles.Any())
         {
             ICollection<string>? userRoleClaims = _httpContextAccessor.HttpContext.User.GetRoleClaims() ?? [];

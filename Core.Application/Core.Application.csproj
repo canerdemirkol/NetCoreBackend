@@ -28,5 +28,6 @@
     <ProjectReference Include="..\Core.CrossCuttingConcerns.Logging\Core.CrossCuttingConcerns.Logging.csproj" />
     <ProjectReference Include="..\Core.CrossCuttingConcerns.Exception\Core.CrossCuttingConcerns.Exception.csproj" />
     <ProjectReference Include="..\Core.Security\Core.Security.csproj" />
+    <ProjectReference Include="..\Core.MultiTenancy\Core.MultiTenancy.csproj" />
   </ItemGroup>
 </Project>

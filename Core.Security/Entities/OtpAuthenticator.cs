@@ -2,7 +2,7 @@
 
 namespace NetCoreBackend.NArchitecture.Core.Security.Entities;
 
-public class OtpAuthenticator<TUserId> : Entity<TUserId>
+public class OtpAuthenticator<TUserId> : TenantEntity<TUserId>
 {
     public TUserId UserId { get; set; }
     public byte[] SecretKey { get; set; }

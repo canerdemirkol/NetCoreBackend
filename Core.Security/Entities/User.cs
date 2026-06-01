@@ -3,7 +3,7 @@ using NetCoreBackend.NArchitecture.Core.Security.Enums;
 
 namespace NetCoreBackend.NArchitecture.Core.Security.Entities;
 
-public class User<TId> : Entity<TId>
+public class User<TId> : TenantEntity<TId>
 {
     public string Email { get; set; }
     public byte[] PasswordSalt { get; set; }

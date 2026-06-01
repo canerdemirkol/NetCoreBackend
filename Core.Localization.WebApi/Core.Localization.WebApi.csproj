@@ -23,5 +23,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Core.Localization.Abstraction\Core.Localization.Abstraction.csproj" />
+    <ProjectReference Include="..\Core.MultiTenancy\Core.MultiTenancy.csproj" />
   </ItemGroup>
 </Project>

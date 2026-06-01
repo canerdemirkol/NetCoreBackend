@@ -17,52 +17,71 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
     where TContext : DbContext
 {
     protected readonly TContext Context;
+    protected readonly ITenantEntitySetter? TenantSetter;
 
-    public EfRepositoryBase(TContext context)
+    // Convenience accessor for raw SQL methods that bypass EF Core global query filters.
+    // Always pass this as a parameter when constructing WHERE TenantId = @tenantId clauses.
+    protected Guid? CurrentTenantId => TenantSetter?.CurrentTenantId;
+
+    public EfRepositoryBase(TContext context, ITenantEntitySetter? tenantSetter = null)
     {
         Context = context;
+        TenantSetter = tenantSetter;
     }
 
     public IQueryable<TEntity> Query()
     {
         return Context.Set<TEntity>();
     }
+
+    // Safe: FromSqlRaw goes through DbSet → EF Core wraps it as subquery → global query filter (TenantId) is applied automatically.
     public IList<TResult> ExecuteSqlCommand<TResult>(string sql, object[]? parameters = null) where TResult : Entity<TEntityId>, new()
     {
-        if (parameters is null)
-        {
-            return Context.Set<TResult>().FromSqlRaw(sql).ToList();
-        }
-        else
-        {
-            return Context.Set<TResult>().FromSqlRaw(sql, parameters).ToList();
-        }
+        return parameters is null
+            ? Context.Set<TResult>().FromSqlRaw(sql).ToList()
+            : Context.Set<TResult>().FromSqlRaw(sql, parameters).ToList();
     }
 
+    // WARNING: Database.ExecuteSqlRawAsync bypasses EF Core global query filters entirely.
+    // If TEntity is a tenant-aware entity, callers MUST include WHERE TenantId = @tenantId in the SQL
+    // and pass CurrentTenantId as a parameter. SuperAdmin is exempt.
     public async Task<int> ExecuteSqlRawAsync(string sql, object[]? parameters = null)
     {
-
-        int result = parameters == null
+        GuardTenantContext();
+        return parameters == null
             ? await Context.Database.ExecuteSqlRawAsync(sql).ConfigureAwait(false)
             : await Context.Database.ExecuteSqlRawAsync(sql, parameters).ConfigureAwait(false);
-
-
-        return result;
     }
 
+    // WARNING: Stored procedures bypass EF Core global query filters.
+    // The procedure itself must enforce tenant isolation via TenantId parameter.
+    // SuperAdmin is exempt.
     public async Task<int> ExecuteStoredProcedureAsync(string procedure, object[]? parameters = null)
     {
+        GuardTenantContext();
         string command = $"BEGIN {procedure}; END;";
-        int result = parameters == null
+        return parameters == null
             ? await Context.Database.ExecuteSqlRawAsync(command).ConfigureAwait(false)
             : await Context.Database.ExecuteSqlRawAsync(command, parameters).ConfigureAwait(false);
+    }
 
-        return result;
+    // Throws if the entity is tenant-aware but no tenant context is present (and caller is not SuperAdmin).
+    // Prevents accidental cross-tenant data mutations via raw SQL.
+    private void GuardTenantContext()
+    {
+        if (TenantSetter is null) return;                          // no multi-tenancy wired up
+        if (TenantSetter.IsSuperAdmin) return;                    // SuperAdmin may cross tenants
+        if (typeof(ITenantEntity).IsAssignableFrom(typeof(TEntity)) && !CurrentTenantId.HasValue)
+            throw new InvalidOperationException(
+                $"Raw SQL on tenant entity '{typeof(TEntity).Name}' requires an active tenant context. " +
+                "Ensure TenantMiddleware has run and the request carries a valid tenant_id claim.");
     }
 
     protected virtual void EditEntityPropertiesToAdd(TEntity entity)
     {
         entity.CreatedDate = DateTime.UtcNow;
+        if (entity is ITenantEntity tenantEntity)
+            TenantSetter?.SetTenantId(tenantEntity);
     }
 
     public async Task<TEntity> AddAsync(TEntity entity, CancellationToken cancellationToken = default)

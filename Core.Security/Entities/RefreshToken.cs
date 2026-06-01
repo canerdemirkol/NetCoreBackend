@@ -2,7 +2,7 @@
 
 namespace NetCoreBackend.NArchitecture.Core.Security.Entities;
 
-public class RefreshToken<TId, TUserId> : Entity<TId>
+public class RefreshToken<TId, TUserId> : TenantEntity<TId>
 {
     public TUserId UserId { get; set; }
     public string Token { get; set; }
