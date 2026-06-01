@@ -11,19 +11,21 @@ public class TenantContext : ITenantContext
     public bool HasTenant => TenantId.HasValue;
     public string? DefaultLocale { get; private set; }
 
-    public void SetTenant(Guid tenantId, string identifier, string? defaultLocale = null)
+    // Setters are internal — only TenantMiddleware (same assembly) may mutate state.
+    // Handlers and services should depend on ITenantContext (read-only).
+    internal void SetTenant(Guid tenantId, string identifier, string? defaultLocale = null)
     {
         TenantId = tenantId;
         TenantIdentifier = identifier;
         DefaultLocale = defaultLocale;
     }
 
-    public void SetSuperAdmin()
+    internal void SetSuperAdmin()
     {
         IsSuperAdmin = true;
     }
 
-    public void SetImpersonating()
+    internal void SetImpersonating()
     {
         IsImpersonating = true;
     }

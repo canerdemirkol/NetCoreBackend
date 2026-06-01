@@ -59,13 +59,13 @@ public static class MockRepositoryHelper
                     CancellationToken cancellationToken
                 ) =>
                 {
-                    IList<TEntity> list = new List<TEntity>();
-
+                    IEnumerable<TEntity> query = entityList;
                     if (!withDeleted)
-                        list = entityList.Where(e => !e.DeletedDate.HasValue).ToList();
-                    list = expression == null ? entityList : (IList<TEntity>)entityList.Where(expression.Compile()).ToList();
+                        query = query.Where(e => !e.DeletedDate.HasValue);
+                    if (expression != null)
+                        query = query.Where(expression.Compile());
 
-                    Paginate<TEntity> paginateList = new() { Items = list };
+                    Paginate<TEntity> paginateList = new() { Items = query.ToList() };
                     return paginateList;
                 }
             );
@@ -94,10 +94,10 @@ public static class MockRepositoryHelper
                     CancellationToken cancellationToken
                 ) =>
                 {
+                    IEnumerable<TEntity> query = entityList;
                     if (!withDeleted)
-                        entityList = entityList.Where(e => !e.DeletedDate.HasValue).ToList();
-                    TEntity? result = entityList.FirstOrDefault(predicate: expression.Compile());
-                    return result;
+                        query = query.Where(e => !e.DeletedDate.HasValue);
+                    return query.FirstOrDefault(predicate: expression.Compile());
                 }
             );
     }
@@ -126,10 +126,10 @@ public static class MockRepositoryHelper
             .ReturnsAsync(
                 (TEntity entity, CancellationToken cancellationToken) =>
                 {
-                    TEntity? result = entityList.FirstOrDefault(x => x.Id!.Equals(entity.Id));
-                    if (result != null)
-                        result = entity;
-                    return result;
+                    int index = entityList.FindIndex(x => x.Id!.Equals(entity.Id));
+                    if (index >= 0)
+                        entityList[index] = entity;
+                    return entity;
                 }
             );
     }
@@ -168,14 +168,15 @@ public static class MockRepositoryHelper
             .ReturnsAsync(
                 (
                     Expression<Func<TEntity, bool>> expression,
+                    Func<IQueryable<TEntity>, IIncludableQueryable<TEntity, object>>? include,
                     bool withDeleted,
-                    bool enableTracking,
                     CancellationToken cancellationToken
                 ) =>
                 {
+                    IEnumerable<TEntity> query = entityList;
                     if (!withDeleted)
-                        entityList = entityList.Where(e => !e.DeletedDate.HasValue).ToList();
-                    return entityList.Any(expression.Compile());
+                        query = query.Where(e => !e.DeletedDate.HasValue);
+                    return expression == null ? query.Any() : query.Any(expression.Compile());
                 }
             );
     }

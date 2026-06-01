@@ -1,5 +1,5 @@
 ﻿using System.Security.Claims;
-using NetCoreBackend.NArchitecture.Core.Security.Constants;
+using NetCoreBackend.NArchitecture.Core.MultiTenancy.Constants;
 
 namespace NetCoreBackend.NArchitecture.Core.Security.Extensions;
 
@@ -33,7 +33,10 @@ public static class ClaimExtensions
 
     public static void AddTenantId(this ICollection<Claim> claims, Guid? tenantId)
     {
-        if (tenantId.HasValue)
+        // Guid? is a struct wrapper: Guid.Empty still has HasValue=true. Without the
+        // Guid.Empty check we would emit "tenant_id: 00000000-..." into the JWT, which
+        // EF Core's global filter would then match against orphaned rows.
+        if (tenantId.HasValue && tenantId.Value != Guid.Empty)
             claims.Add(new Claim(TenantClaimTypes.TenantId, tenantId.Value.ToString()));
     }
 

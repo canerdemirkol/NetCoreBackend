@@ -1,4 +1,6 @@
+using System.Net;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 using NetCoreBackend.NArchitecture.Core.MultiTenancy.Abstractions;
 using NetCoreBackend.NArchitecture.Core.MultiTenancy.Constants;
 using NetCoreBackend.NArchitecture.Core.MultiTenancy.Context;
@@ -10,11 +12,22 @@ namespace NetCoreBackend.NArchitecture.Core.MultiTenancy.Middleware;
 public class TenantMiddleware
 {
     private const string TenantHeader = "X-Tenant-ID";
-    private readonly RequestDelegate _next;
 
-    public TenantMiddleware(RequestDelegate next)
+    // Subdomains that must never resolve to a tenant slug, regardless of DB content.
+    // Prevents www.app.com / api.app.com / cdn.app.com from being treated as tenants
+    // named "www" / "api" / "cdn".
+    private static readonly HashSet<string> ReservedSubdomains = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "www", "api", "app", "admin", "cdn", "static", "assets", "mail", "smtp", "ftp"
+    };
+
+    private readonly RequestDelegate _next;
+    private readonly ILogger<TenantMiddleware> _logger;
+
+    public TenantMiddleware(RequestDelegate next, ILogger<TenantMiddleware> logger)
     {
         _next = next;
+        _logger = logger;
     }
 
     public async Task InvokeAsync(HttpContext context, ITenantService tenantService, TenantContext tenantContext)
@@ -31,7 +44,17 @@ public class TenantMiddleware
             return;
         }
 
-        Tenant? tenant = await ResolveTenantAsync(context, tenantService, tenantIdClaim);
+        Tenant? tenant;
+        try
+        {
+            tenant = await ResolveTenantAsync(context, tenantService, tenantIdClaim);
+        }
+        catch (TenantConflictException ex)
+        {
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await context.Response.WriteAsync(ex.Message);
+            return;
+        }
 
         if (tenant == null)
         {
@@ -56,32 +79,65 @@ public class TenantMiddleware
         await _next(context);
     }
 
-    private static async Task<Tenant?> ResolveTenantAsync(HttpContext context, ITenantService tenantService, string? tenantIdClaim)
+    private async Task<Tenant?> ResolveTenantAsync(HttpContext context, ITenantService tenantService, string? tenantIdClaim)
     {
-        // Priority 1: JWT claim tenant_id
-        if (!string.IsNullOrEmpty(tenantIdClaim) && Guid.TryParse(tenantIdClaim, out Guid tenantId))
-            return await tenantService.GetByIdAsync(tenantId);
+        bool hasHeader = context.Request.Headers.TryGetValue(TenantHeader, out var headerValue)
+            && !string.IsNullOrEmpty(headerValue);
 
-        // Priority 2: X-Tenant-ID header
-        if (context.Request.Headers.TryGetValue(TenantHeader, out var headerValue) && !string.IsNullOrEmpty(headerValue))
-            return await tenantService.GetBySlugAsync(headerValue!);
+        // Priority 1: JWT claim wins, but if header is ALSO present we verify they agree.
+        // A mismatch is a 400 — the client is sending contradictory tenant identifiers.
+        if (!string.IsNullOrEmpty(tenantIdClaim) && Guid.TryParse(tenantIdClaim, out Guid tenantId))
+        {
+            Tenant? tenantFromClaim = await tenantService.GetByIdAsync(tenantId);
+            if (hasHeader && tenantFromClaim != null
+                && !string.Equals(headerValue.ToString(), tenantFromClaim.Identifier, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new TenantConflictException(
+                    $"X-Tenant-ID header ('{headerValue}') does not match the tenant in the access token.");
+            }
+            return tenantFromClaim;
+        }
+
+        // Priority 2: X-Tenant-ID header (typically pre-login or service-to-service)
+        if (hasHeader)
+        {
+            Tenant? tenant = await tenantService.GetBySlugAsync(headerValue!);
+            if (tenant == null)
+                _logger.LogWarning("Tenant slug from header did not resolve: {Slug}", headerValue.ToString());
+            return tenant;
+        }
 
         // Priority 3: Subdomain
         string? subdomain = ExtractSubdomain(context.Request.Host.Host);
         if (!string.IsNullOrEmpty(subdomain))
-            return await tenantService.GetBySlugAsync(subdomain);
+        {
+            Tenant? tenant = await tenantService.GetBySlugAsync(subdomain);
+            if (tenant == null)
+                _logger.LogWarning("Subdomain did not resolve to a tenant: {Subdomain}", subdomain);
+            return tenant;
+        }
 
         return null;
     }
 
-    private static string? ExtractSubdomain(string host)
+    internal static string? ExtractSubdomain(string host)
     {
-        // Strip port
+        // Strip port (Host.Host should not include port, but defend anyway)
         host = host.Split(':')[0];
+
+        // Numeric IPs never carry tenant info — "192.168.1.1" must not yield "192"
+        if (IPAddress.TryParse(host, out _)) return null;
+
         string[] parts = host.Split('.');
 
-        // "acme.yourapp.com" → 3 parts → "acme"
-        // "localhost" or "yourapp.com" → no subdomain
-        return parts.Length >= 3 ? parts[0] : null;
+        // Need at least 3 parts to have a subdomain: sub.example.com
+        // Note: compound TLDs (app.co.uk) are not handled here — apps targeting those
+        // should configure tenants via header or JWT instead of subdomain.
+        if (parts.Length < 3) return null;
+
+        string subdomain = parts[0];
+        if (ReservedSubdomains.Contains(subdomain)) return null;
+
+        return subdomain;
     }
 }

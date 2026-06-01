@@ -77,6 +77,32 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
                 "Ensure TenantMiddleware has run and the request carries a valid tenant_id claim.");
     }
 
+    // Verifies entity belongs to the current tenant before Update/Delete operations.
+    // EF Core's global query filter does NOT apply to Update/Delete by primary key —
+    // without this guard, a tenant could mutate entities belonging to another tenant
+    // by submitting a payload containing a foreign Id.
+    private void GuardTenantOwnership(TEntity entity)
+    {
+        if (TenantSetter is null) return;
+        if (TenantSetter.IsSuperAdmin) return;
+        if (entity is not ITenantEntity tenantEntity) return;
+
+        if (!CurrentTenantId.HasValue)
+            throw new InvalidOperationException(
+                $"Write on tenant entity '{typeof(TEntity).Name}' requires an active tenant context.");
+
+        if (tenantEntity.TenantId != CurrentTenantId.Value)
+            throw new InvalidOperationException(
+                $"Cross-tenant write blocked: entity TenantId '{tenantEntity.TenantId}' " +
+                $"does not match current tenant '{CurrentTenantId.Value}'.");
+    }
+
+    private void GuardTenantOwnership(IEnumerable<TEntity> entities)
+    {
+        foreach (TEntity entity in entities)
+            GuardTenantOwnership(entity);
+    }
+
     protected virtual void EditEntityPropertiesToAdd(TEntity entity)
     {
         entity.CreatedDate = DateTime.UtcNow;
@@ -111,6 +137,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
 
     public async Task<TEntity> UpdateAsync(TEntity entity, CancellationToken cancellationToken = default)
     {
+        GuardTenantOwnership(entity);
         EditEntityPropertiesToUpdate(entity);
         Context.Update(entity);
         await Context.SaveChangesAsync(cancellationToken);
@@ -122,6 +149,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
         CancellationToken cancellationToken = default
     )
     {
+        GuardTenantOwnership(entities);
         foreach (TEntity entity in entities)
             EditEntityPropertiesToUpdate(entity);
         Context.UpdateRange(entities);
@@ -131,6 +159,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
 
     public async Task<TEntity> DeleteAsync(TEntity entity, bool permanent = false, CancellationToken cancellationToken = default)
     {
+        GuardTenantOwnership(entity);
         await SetEntityAsDeleted(entity, permanent, isAsync: true, cancellationToken);
         await Context.SaveChangesAsync(cancellationToken);
         return entity;
@@ -142,6 +171,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
         CancellationToken cancellationToken = default
     )
     {
+        GuardTenantOwnership(entities);
         await SetEntityAsDeleted(entities, permanent, isAsync: true, cancellationToken);
         await Context.SaveChangesAsync(cancellationToken);
         return entities;
@@ -249,6 +279,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
 
     public TEntity Update(TEntity entity)
     {
+        GuardTenantOwnership(entity);
         EditEntityPropertiesToUpdate(entity);
         Context.Update(entity);
         Context.SaveChanges();
@@ -257,6 +288,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
 
     public ICollection<TEntity> UpdateRange(ICollection<TEntity> entities)
     {
+        GuardTenantOwnership(entities);
         foreach (TEntity entity in entities)
             EditEntityPropertiesToUpdate(entity);
         Context.UpdateRange(entities);
@@ -266,6 +298,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
 
     public TEntity Delete(TEntity entity, bool permanent = false)
     {
+        GuardTenantOwnership(entity);
         SetEntityAsDeleted(entity, permanent, isAsync: false).Wait();
         Context.SaveChanges();
         return entity;
@@ -273,6 +306,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
 
     public ICollection<TEntity> DeleteRange(ICollection<TEntity> entities, bool permanent = false)
     {
+        GuardTenantOwnership(entities);
         SetEntityAsDeleted(entities, permanent, isAsync: false).Wait();
         Context.SaveChanges();
         return entities;

@@ -27,5 +27,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Core.Persistence\Core.Persistence.csproj" />
+    <ProjectReference Include="..\Core.MultiTenancy\Core.MultiTenancy.csproj" />
   </ItemGroup>
 </Project>

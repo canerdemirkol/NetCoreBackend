@@ -33,9 +33,16 @@ public class AuthorizationBehavior<TRequest, TResponse> : IPipelineBehavior<TReq
         if (request.Roles.Any())
         {
             ICollection<string>? userRoleClaims = _httpContextAccessor.HttpContext.User.GetRoleClaims() ?? [];
+
+            // Tenant-level "Admin" bypasses role-specific checks within the tenant — BUT not when
+            // the request explicitly requires "SuperAdmin". SuperAdmin gating must remain reachable
+            // only by PlatformAdmin tokens (handled by the IsSuperAdmin() bypass above).
+            bool requiresSuperAdmin = request.Roles.Contains(GeneralOperationClaims.SuperAdmin);
+
             bool isNotMatchedAUserRoleClaimWithRequestRoles = userRoleClaims
                 .FirstOrDefault(userRoleClaim =>
-                    userRoleClaim == GeneralOperationClaims.Admin || request.Roles.Contains(userRoleClaim)
+                    (!requiresSuperAdmin && userRoleClaim == GeneralOperationClaims.Admin)
+                    || request.Roles.Contains(userRoleClaim)
                 )
                 == null;
             if (isNotMatchedAUserRoleClaimWithRequestRoles)

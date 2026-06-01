@@ -81,14 +81,17 @@ public class JwtHelper<TUserId, TOperationClaimId, TRefreshTokenId> : ITokenHelp
 
     private AccessToken BuildAccessToken(IEnumerable<Claim> claims)
     {
-        DateTime expiration = DateTime.Now.AddMinutes(_tokenOptions.AccessTokenExpiration);
+        // JWT spec ("exp", "nbf") uses Unix epoch (UTC). Using DateTime.Now would shift token lifetime
+        // by the server timezone offset, causing inconsistent expiration across timezones.
+        DateTime notBefore = DateTime.UtcNow;
+        DateTime expiration = notBefore.AddMinutes(_tokenOptions.AccessTokenExpiration);
         SecurityKey securityKey = SecurityKeyHelper.CreateSecurityKey(_tokenOptions.SecurityKey);
         SigningCredentials signingCredentials = SigningCredentialsHelper.CreateSigningCredentials(securityKey);
         JwtSecurityToken jwt = new(
             _tokenOptions.Issuer,
             _tokenOptions.Audience,
             expires: expiration,
-            notBefore: DateTime.Now,
+            notBefore: notBefore,
             claims: claims,
             signingCredentials: signingCredentials
         );

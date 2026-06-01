@@ -27,5 +27,7 @@ public class Mail
         TextBody = textBody;
         HtmlBody = htmlBody;
         ToList = toList;
+        CcList = [];
+        BccList = [];
     }
 }

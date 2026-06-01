@@ -146,14 +146,17 @@ public class AppDbContext : DbContext
 
 ## JWT Claim Structure
 
+> Note: `is_super_admin` and `is_impersonating` claims are only emitted when their value is `true` —
+> they are **absent** (not `false`) on normal tenant user tokens. The `IsSuperAdmin()` / `IsImpersonating()`
+> extension methods treat absent claims as `false`.
+
 ### Normal Tenant User
 ```json
 {
   "sub": "user-guid",
   "email": "user@acme.com",
   "role": ["Manager"],
-  "tenant_id": "acme-guid",
-  "is_super_admin": false
+  "tenant_id": "acme-guid"
 }
 ```
 
@@ -163,7 +166,7 @@ public class AppDbContext : DbContext
   "sub": "superadmin-guid",
   "email": "admin@platform.com",
   "role": ["SuperAdmin"],
-  "is_super_admin": true
+  "is_super_admin": "true"
 }
 ```
 
@@ -174,8 +177,8 @@ public class AppDbContext : DbContext
   "email": "admin@platform.com",
   "role": ["SuperAdmin"],
   "tenant_id": "acme-guid",
-  "is_super_admin": true,
-  "is_impersonating": true
+  "is_super_admin": "true",
+  "is_impersonating": "true"
 }
 ```
 
@@ -184,14 +187,14 @@ public class AppDbContext : DbContext
 ## Creating Tenant-Aware JWT Tokens
 
 ```csharp
-// Normal user token
-var token = _jwtHelper.CreateToken(user, operationClaims, tenantId: tenant.Id);
+// Normal tenant user token (tenant_id claim is sourced from user.TenantId)
+AccessToken token = _tokenHelper.CreateToken(user, operationClaims);
 
-// SuperAdmin token (no tenant)
-var token = _jwtHelper.CreateToken(user, operationClaims, tenantId: null, isSuperAdmin: true);
+// PlatformAdmin token (is_super_admin: true, no tenant_id)
+AccessToken token = _tokenHelper.CreateAdminToken(admin, operationClaims);
 
-// SuperAdmin impersonating a tenant
-var token = _jwtHelper.CreateToken(user, operationClaims, tenantId: targetTenantId, isSuperAdmin: true, isImpersonating: true);
+// PlatformAdmin impersonating a tenant
+AccessToken token = _tokenHelper.CreateImpersonationToken(admin, operationClaims, targetTenantId);
 ```
 
 ---

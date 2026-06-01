@@ -1,6 +1,6 @@
 ﻿using System.Collections.Immutable;
 using System.Security.Claims;
-using NetCoreBackend.NArchitecture.Core.Security.Constants;
+using NetCoreBackend.NArchitecture.Core.MultiTenancy.Constants;
 
 namespace NetCoreBackend.NArchitecture.Core.Security.Extensions;
 

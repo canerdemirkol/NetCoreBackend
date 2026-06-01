@@ -60,15 +60,16 @@ public class PlatformAdmin<TId> : Entity<TId>  // no TenantId column
 
 ## Token Structures
 
+> Note: `is_super_admin` and `is_impersonating` claims are **only emitted when their value is `true`**.
+> A normal tenant user token does not contain these claims at all (absence means `false`).
+
 ### Tenant User Token
 ```json
 {
   "nameid": "user-guid",
   "email": "john@acme.com",
   "role": ["Manager"],
-  "tenant_id": "acme-guid",
-  "is_super_admin": "false",
-  "is_impersonating": "false"
+  "tenant_id": "acme-guid"
 }
 ```
 
@@ -78,8 +79,7 @@ public class PlatformAdmin<TId> : Entity<TId>  // no TenantId column
   "nameid": "admin-guid",
   "email": "admin@platform.com",
   "role": ["SuperAdmin"],
-  "is_super_admin": "true",
-  "is_impersonating": "false"
+  "is_super_admin": "true"
 }
 ```
 
@@ -240,7 +240,64 @@ After this, the admin uses the impersonation token. All requests are scoped to `
 
 ---
 
-## Flow 3 — Exit Impersonation
+## Flow 3 — Refresh Token
+
+When the access token expires, the client exchanges its refresh token for a new pair. Because the user has no valid JWT at this point, the **tenant context must come from the header or subdomain** — `TenantMiddleware` cannot resolve from a claim that doesn't exist.
+
+```
+POST /api/auth/refresh
+X-Tenant-ID: acme                        ← required (no JWT to read tenant from)
+Body: { "refreshToken": "..." }
+```
+
+```csharp
+public record RefreshTokenCommand(string RefreshToken) : IRequest<LoginResponse>;
+
+public class RefreshTokenCommandHandler : IRequestHandler<RefreshTokenCommand, LoginResponse>
+{
+    private readonly IRefreshTokenRepository _refreshTokenRepo;
+    private readonly IUserRepository _userRepo;
+    private readonly IOperationClaimRepository _claimRepo;
+    private readonly ITokenHelper<Guid, int, Guid> _tokenHelper;
+    private readonly ITenantContext _tenantContext;
+
+    public async Task<LoginResponse> Handle(RefreshTokenCommand request, CancellationToken ct)
+    {
+        if (!_tenantContext.HasTenant)
+            throw new BusinessException("Tenant identifier is required for token refresh.");
+
+        // EF filter automatically scopes refresh token lookup to the current tenant
+        RefreshToken<Guid, Guid>? existing = await _refreshTokenRepo.GetAsync(
+            rt => rt.Token == request.RefreshToken
+               && rt.RevokedDate == null
+               && rt.ExpirationDate > DateTime.UtcNow,
+            ct);
+
+        if (existing is null)
+            throw new AuthorizationException("Invalid refresh token.");
+
+        User<Guid>? user = await _userRepo.GetAsync(u => u.Id == existing.UserId, ct)
+            ?? throw new AuthorizationException("User not found.");
+
+        // Rotate: revoke the old token, issue a fresh pair
+        existing.RevokedDate = DateTime.UtcNow;
+        await _refreshTokenRepo.UpdateAsync(existing, ct);
+
+        var userClaims = await _claimRepo.GetListByUserAsync(user.Id, ct);
+        AccessToken newAccess = _tokenHelper.CreateToken(user, userClaims);
+        RefreshToken<Guid, Guid> newRefresh = _tokenHelper.CreateRefreshToken(user, ipAddress);
+        await _refreshTokenRepo.AddAsync(newRefresh, ct);
+
+        return new LoginResponse(newAccess.Token, newRefresh.Token, newAccess.ExpirationDate);
+    }
+}
+```
+
+PlatformAdmin tokens do not currently include refresh tokens (`CreateAdminToken` returns access token only); admins re-login on expiration.
+
+---
+
+## Flow 4 — Exit Impersonation
 
 ```
 POST /api/auth/impersonate/exit
@@ -407,6 +464,7 @@ CREATE TABLE PlatformAdmins (
 | Endpoint | Who | Requires | Returns |
 |---|---|---|---|
 | `POST /api/auth/login` | Everyone | email + password (+ X-Tenant-ID for users) | Token matching the caller's identity |
+| `POST /api/auth/refresh` | Tenant user | refresh token + X-Tenant-ID | New access + refresh token pair |
 | `POST /api/auth/impersonate` | PlatformAdmin | SuperAdmin token + tenantId | Tenant-scoped impersonation token |
 | `POST /api/auth/impersonate/exit` | PlatformAdmin | SuperAdmin or impersonation token | Plain SuperAdmin token |
 
