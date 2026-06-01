@@ -103,6 +103,10 @@ See [AUTH.md](./AUTH.md) for the single-endpoint authentication system (server d
 
 ## Getting Started
 
+> **Tam kurulum rehberi:** [**SETUP.md**](./SETUP.md) — `appsettings.json`, `Program.cs`,
+> `DbContext`, `ITenantService`, pipeline behavior'lar ve middleware sırası dahil. Aşağıdaki
+> bölüm hızlı bir özet.
+
 ### 1. Install (via project reference or NuGet)
 ```xml
 <PackageReference Include="NetCoreBackend.NArchitecture.Core.Application" Version="1.0.0" />
@@ -114,10 +118,14 @@ See [AUTH.md](./AUTH.md) for the single-endpoint authentication system (server d
 builder.Services.AddMultiTenancy();          // ITenantContext, TenantContext (scoped)
 builder.Services.AddScoped<ITenantService, YourTenantService>();
 
-// MediatR + Behaviors
+// MediatR + all pipeline behaviors in one call
 builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(Program).Assembly));
+builder.Services.AddNArchitecturePipelineBehaviors();
+```
+
+Or, cherry-pick individual behaviors (e.g., only Authorization + Caching):
+```csharp
 builder.Services.AddScoped(typeof(IPipelineBehavior<,>), typeof(AuthorizationBehavior<,>));
-builder.Services.AddScoped(typeof(IPipelineBehavior<,>), typeof(TenantValidationBehavior<,>));
 builder.Services.AddScoped(typeof(IPipelineBehavior<,>), typeof(CachingBehavior<,>));
 ```
 
@@ -141,6 +149,15 @@ app.MapControllers();
 - (Optional) AWS credentials for translation
 
 ---
+
+## Project status
+
+| Aspect | State |
+|---|---|
+| Production-readiness | All known critical bugs and security issues addressed (see git log) |
+| Framework-level unit tests | **Not included** — consuming apps are expected to test their own use of the framework. `Core.Test` ships helpers (`BaseFakeData`, `MockRepositoryHelper`, `BaseMockRepository`) so consumer test projects can mock repositories without ceremony. |
+| Elasticsearch client | NEST 7.x (Newtonsoft-based serializer). Migration to Elastic.Clients.Elasticsearch 8.x (System.Text.Json) is intentionally out of scope and tracked separately. |
+| Newtonsoft.Json | Only used by `Core.ElasticSearch` for NEST compatibility. Other layers are System.Text.Json end-to-end. |
 
 ## License
 

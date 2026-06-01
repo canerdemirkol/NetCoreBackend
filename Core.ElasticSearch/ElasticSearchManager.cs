@@ -17,6 +17,11 @@ public class ElasticSearchManager : IElasticSearch
     public ElasticSearchManager(ElasticSearchConfig configuration)
     {
         SingleNodeConnectionPool pool = new(new Uri(configuration.ConnectionString));
+        // Newtonsoft.Json is used here (instead of System.Text.Json) because NEST 7.x ships
+        // with Nest.JsonNetSerializer for ReferenceLoopHandling and similar serializer knobs.
+        // NEST does not currently offer a System.Text.Json-based serializer; migrating to
+        // Elastic.Clients.Elasticsearch 8.x (which uses STJ natively) is a separate effort
+        // and is intentionally not part of this layer.
         ConnectionSettings connectionSettings = new ConnectionSettings(
             pool,
             sourceSerializer: (builtInSerializer, settings) =>
