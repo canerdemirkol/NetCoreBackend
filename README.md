@@ -41,29 +41,29 @@
 
 | Project | Purpose |
 |---|---|
-| `Core.Application` | MediatR pipelines, CQRS base, DTOs, business rules |
-| `Core.Persistence` | EF Core repository pattern, paging, dynamic query, tenant entity base |
-| `Core.Security` | JWT, refresh tokens, hashing, OTP, claim extensions |
-| `Core.MultiTenancy` | Multi-tenant middleware, ITenantContext, tenant resolution |
-| `Core.CrossCuttingConcerns.Exception` | Domain exception types |
-| `Core.CrossCuttingConcerns.Exception.WebApi` | Global exception handler for Web API |
-| `Core.CrossCuttingConcerns.Logging` | LogDetail, LogParameter models |
-| `Core.CrossCuttingConcerns.Logging.Abstraction` | ILogger abstraction |
-| `Core.CrossCuttingConcerns.Logging.SeriLog` | Serilog implementation |
-| `Core.CrossCuttingConcerns.Logging.Serilog.File` | File sink configuration |
-| `Core.CrossCuttingConcerns.Logging.DependencyInjection` | DI registration for logging |
-| `Core.Localization.Abstraction` | ILocalizationService abstraction |
-| `Core.Localization.Resource.Yaml` | YAML-based resource files |
-| `Core.Localization.Resource.Yaml.DependencyInjection` | DI registration for YAML localization |
-| `Core.Localization.Translation` | Translation pipeline |
-| `Core.Localization.WebApi` | Localization middleware for Web API |
-| `Core.Mailing` | Email abstraction (IMailService, MailRequest) |
-| `Core.Mailing.MailKit` | MailKit implementation |
-| `Core.ElasticSearch` | Elasticsearch (NEST) integration |
-| `Core.Translation.Abstraction` | ITranslationService abstraction |
-| `Core.Translation.AmazonTranslate` | AWS Translate implementation |
-| `Core.Translation.AmazonTranslate.DependencyInjection` | DI registration |
-| `Core.Test` | Base test helpers and AutoMapper test setup |
+| [`Core.Application`](Core.Application/README.md) | MediatR pipelines, CQRS base, DTOs, business rules |
+| [`Core.Persistence`](Core.Persistence/README.md) | EF Core repository pattern, paging, dynamic query, tenant entity base |
+| [`Core.Security`](Core.Security/README.md) | JWT, refresh tokens, hashing, OTP, claim extensions |
+| [`Core.MultiTenancy`](Core.MultiTenancy/README.md) | Multi-tenant middleware, ITenantContext, tenant resolution |
+| [`Core.CrossCuttingConcerns.Exception`](Core.CrossCuttingConcerns.Exception/README.md) | Domain exception types |
+| [`Core.CrossCuttingConcerns.Exception.WebApi`](Core.CrossCuttingConcerns.Exception.WebAPI/README.md) | Global exception handler for Web API |
+| [`Core.CrossCuttingConcerns.Logging`](Core.CrossCuttingConcerns.Logging/README.md) | LogDetail, LogParameter models |
+| [`Core.CrossCuttingConcerns.Logging.Abstraction`](Core.CrossCuttingConcerns.Logging.Abstraction/README.md) | ILogger abstraction |
+| [`Core.CrossCuttingConcerns.Logging.SeriLog`](Core.CrossCuttingConcerns.Logging.SeriLog/README.md) | Serilog implementation |
+| [`Core.CrossCuttingConcerns.Logging.Serilog.File`](Core.CrossCuttingConcerns.Logging.Serilog.File/README.md) | File sink configuration |
+| [`Core.CrossCuttingConcerns.Logging.DependencyInjection`](Core.CrossCuttingConcerns.Logging.DependencyInjection/README.md) | DI registration for logging |
+| [`Core.Localization.Abstraction`](Core.Localization.Abstraction/README.md) | ILocalizationService abstraction |
+| [`Core.Localization.Resource.Yaml`](Core.Localization.Resource.Yaml/README.md) | YAML-based resource files |
+| [`Core.Localization.Resource.Yaml.DependencyInjection`](Core.Localization.Resource.Yaml.DependencyInjection/README.md) | DI registration for YAML localization |
+| [`Core.Localization.Translation`](Core.Localization.Translation/README.md) | Translation pipeline |
+| [`Core.Localization.WebApi`](Core.Localization.WebApi/README.md) | Localization middleware for Web API |
+| [`Core.Mailing`](Core.Mailing/README.md) | Email abstraction (IMailService, MailRequest) |
+| [`Core.Mailing.MailKit`](Core.Mailing.MailKit/README.md) | MailKit implementation |
+| [`Core.ElasticSearch`](Core.ElasticSearch/README.md) | Elasticsearch (NEST) integration |
+| [`Core.Translation.Abstraction`](Core.Translation.Abstraction/README.md) | ITranslationService abstraction |
+| [`Core.Translation.AmazonTranslate`](Core.Translation.AmazonTranslate/README.md) | AWS Translate implementation |
+| [`Core.Translation.AmazonTranslate.DependencyInjection`](Core.Translation.AmazonTranslate.DependencyInjection/README.md) | DI registration |
+| [`Core.Test`](Core.Test/README.md) | Base test helpers and AutoMapper test setup |
 
 ---
 
