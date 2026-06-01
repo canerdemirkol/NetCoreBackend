@@ -83,8 +83,8 @@ Platform'un ortak verisi → Entity   (Countries, Currencies, OperationClaims, T
 | `User<TId>` | `TenantEntity` | Same email can exist in multiple tenants |
 | `RefreshToken<TId, TUserId>` | `TenantEntity` | Scoped per tenant for bulk revocation |
 | `UserOperationClaim<TId, TUserId, TOperationClaimId>` | `TenantEntity` | Scoped per tenant |
-| `EmailAuthenticator<TUserId>` | `TenantEntity` | Scoped per tenant |
-| `OtpAuthenticator<TUserId>` | `TenantEntity` | Scoped per tenant |
+| `EmailAuthenticator<TId>` | `TenantEntity` | Scoped per tenant |
+| `OtpAuthenticator<TId>` | `TenantEntity` | Scoped per tenant |
 | `OperationClaim<TId>` | `Entity` | Platform-wide roles, shared across tenants |
 
 ---

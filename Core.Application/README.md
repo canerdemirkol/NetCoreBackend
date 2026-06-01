@@ -8,14 +8,19 @@ Request'e ilgili interface eklenerek behavior aktif edilir:
 
 | Behavior | Interface | Açıklama |
 |---|---|---|
-| `AuthorizationBehavior` | `ISecuredRequest` | Rol tabanlı yetkilendirme. SuperAdmin tüm kontrolleri atlar. |
-| `RequestValidationBehavior` | otomatik | FluentValidation ile request doğrulama |
+| `AuthorizationBehavior` | `ISecuredRequest` | Rol tabanlı yetkilendirme. SuperAdmin tüm kontrolleri atlar (SuperAdmin gating için `Roles = ["SuperAdmin"]`). |
+| `SuperAdminBlockBehavior` | `IBlockedForSuperAdmin` | PlatformAdmin (impersonate etmeden) endpoint'i çağırırsa reddeder. Tenant-user-only operasyonlar için. |
+| `RequestValidationBehavior` | otomatik | FluentValidation ile request doğrulama (`ValidationException` → 400) |
 | `CachingBehavior` | `ICachableRequest` | Distributed cache. Key'e tenant prefix otomatik eklenir. |
 | `CacheRemovingBehavior` | `ICacheRemoverRequest` | Cache grubu temizleme |
 | `TransactionScopeBehavior` | `ITransactionalRequest` | İşlem başarısız olursa rollback |
-| `LoggingBehavior` | `ILoggableRequest` | Request/response log. Log'a `tenant_id` eklenir. |
+| `LoggingBehavior` | `ILoggableRequest` | Request/response log. `ISensitiveRequest` implement edilirse payload "[redacted]" loglanır. |
 | `PerformanceBehavior` | `IIntervalRequest` | Yavaş request uyarısı |
 | `TenantValidationBehavior` | `ITenantValidationRequest` | Tenant context olmadan request reddedilir |
+
+> **Cache key kuralı:** `ICachableRequest.CacheKey` consuming app'te **benzersiz** olmalı. Framework key'leri `t:<tenantId>:<CacheKey>` formatında prefix'liyor ama farklı handler'lar aynı CacheKey değerini kullanırsa cache çakışması ve deserialization hatası yaşanır. Konvansiyon: `"Products:GetAll"`, `"Products:ById:{id}"`, asla yalın `"Products"`.
+
+> **`ISensitiveRequest`:** Şifre, token, kredi kartı vb. veri taşıyan command'lara uygulayın — `LoggingBehavior` payload'ı redact eder, sadece request tipi loglanır.
 
 ## Kullanım
 

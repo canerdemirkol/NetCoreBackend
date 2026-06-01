@@ -36,6 +36,12 @@ app.UseMultiTenancy();   // UseAuthentication'dan SONRA gelmeli
 app.UseAuthorization();
 ```
 
+> **Middleware sırası neden önemli?**
+> `TenantMiddleware`'in 1. öncelik kaynağı JWT'deki `tenant_id` claim'idir. Bu claim ancak
+> `UseAuthentication()` çalıştıktan sonra `HttpContext.User` üzerinden okunabilir. Sıralama
+> ters olursa `User.Claims` boş kalır, middleware doğrudan header/subdomain fallback'lerine
+> düşer ve oturum açmış kullanıcılar bile yanlış tenant'a (veya hiçbir tenant'a) yönlendirilir.
+
 `AddMultiTenancy()` şunları kaydeder:
 - `TenantContext` (scoped)
 - `ITenantContext` → `TenantContext` (scoped)
@@ -56,6 +62,19 @@ public class Tenant : Entity<Guid>
 ```
 
 `DefaultLocale`: Client `Accept-Language` header'ı göndermediğinde `LocalizationMiddleware` bu değeri fallback olarak kullanır.
+
+> **`Identifier` unique olmalı.** Framework code-level uniqueness check yapmıyor; DB constraint'i
+> consuming app'in `DbContext` konfigürasyonunda eklenmeli:
+> ```csharp
+> modelBuilder.Entity<Tenant>().HasIndex(t => t.Identifier).IsUnique();
+> // Domain için de aynı (Domain nullable, multi-tenant)
+> modelBuilder.Entity<Tenant>()
+>     .HasIndex(t => t.Domain)
+>     .IsUnique()
+>     .HasFilter("[Domain] IS NOT NULL");
+> ```
+> Bu constraint olmazsa `acme` slug'lı iki Tenant kaydı oluşturulabilir, `GetBySlugAsync`
+> belirsiz sonuç döndürür.
 
 ## SuperAdmin
 

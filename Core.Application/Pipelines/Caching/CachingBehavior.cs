@@ -30,6 +30,13 @@ public class CachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, 
         _httpContextAccessor = httpContextAccessor;
     }
 
+    // Both CacheKey and CacheGroupKey are namespaced ONLY by tenant — not by request type.
+    // Reason: CacheRemovingBehavior runs on commands (e.g. CreateProductCommand) and must be
+    // able to invalidate keys/groups written by queries (e.g. GetProductsQuery). If queries
+    // prefixed keys with their type, commands could no longer target them.
+    //
+    // CONSEQUENCE for consuming apps: CacheKey strings MUST be unique across query handlers
+    // (e.g. use "Products:GetAll", "Products:ById:{id}", never bare "Products").
     private string BuildCacheKey(string baseKey)
     {
         Guid? tenantId = _httpContextAccessor.HttpContext?.User.GetTenantId();
@@ -68,7 +75,7 @@ public class CachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, 
     {
         TResponse response = await next();
 
-        TimeSpan slidingExpiration = request.SlidingExpiration ?? TimeSpan.FromDays(_cacheSettings.SlidingExpiration);
+        TimeSpan slidingExpiration = request.SlidingExpiration ?? TimeSpan.FromDays(_cacheSettings.SlidingExpirationDays);
         DistributedCacheEntryOptions cacheOptions = new() { SlidingExpiration = slidingExpiration };
 
         byte[] serializeData = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(response));

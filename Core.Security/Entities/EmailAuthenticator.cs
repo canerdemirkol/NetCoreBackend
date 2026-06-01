@@ -2,9 +2,14 @@
 
 namespace NetCoreBackend.NArchitecture.Core.Security.Entities;
 
-public class EmailAuthenticator<TUserId> : TenantEntity<TUserId>
+/// <summary>
+/// Email-based 2FA authenticator. Generic parameter <typeparamref name="TId"/> is the PK of this
+/// entity; it is expected to be the same type as User's ID (typically Guid). Previously misnamed
+/// "TUserId" which conflicted with the <see cref="UserId"/> FK semantics.
+/// </summary>
+public class EmailAuthenticator<TId> : TenantEntity<TId>
 {
-    public TUserId UserId { get; set; }
+    public TId UserId { get; set; }
     public string? ActivationKey { get; set; }
     public bool IsVerified { get; set; }
 
@@ -13,13 +18,13 @@ public class EmailAuthenticator<TUserId> : TenantEntity<TUserId>
         UserId = default!;
     }
 
-    public EmailAuthenticator(TUserId userId, bool isVerified)
+    public EmailAuthenticator(TId userId, bool isVerified)
     {
         UserId = userId;
         IsVerified = isVerified;
     }
 
-    public EmailAuthenticator(TUserId id, TUserId userId, bool isVerified)
+    public EmailAuthenticator(TId id, TId userId, bool isVerified)
         : base(id)
     {
         UserId = userId;

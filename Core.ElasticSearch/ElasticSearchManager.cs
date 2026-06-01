@@ -9,27 +9,30 @@ namespace NetCoreBackend.NArchitecture.Core.ElasticSearch;
 
 public class ElasticSearchManager : IElasticSearch
 {
-    private readonly ConnectionSettings _connectionSettings;
+    // NEST guidance: reuse a single ElasticClient instance per application. Creating a new
+    // client on every call discards the internal connection pool warm-up, serializer caches,
+    // and pipeline configuration — adding measurable overhead per request.
+    private readonly ElasticClient _client;
 
     public ElasticSearchManager(ElasticSearchConfig configuration)
     {
         SingleNodeConnectionPool pool = new(new Uri(configuration.ConnectionString));
-        _connectionSettings = new ConnectionSettings(
+        ConnectionSettings connectionSettings = new ConnectionSettings(
             pool,
-            sourceSerializer: (builtInSerializer, connectionSettings) =>
+            sourceSerializer: (builtInSerializer, settings) =>
                 new JsonNetSerializer(
                     builtInSerializer,
-                    connectionSettings,
+                    settings,
                     jsonSerializerSettingsFactory: () =>
                         new JsonSerializerSettings { ReferenceLoopHandling = ReferenceLoopHandling.Ignore }
                 )
         );
+        _client = new ElasticClient(connectionSettings);
     }
 
     public IReadOnlyDictionary<IndexName, IndexState> GetIndexList()
     {
-        ElasticClient elasticClient = new(_connectionSettings);
-        return elasticClient.Indices.Get(new GetIndexRequest(Indices.All)).Indices;
+        return _client.Indices.Get(new GetIndexRequest(Indices.All)).Indices;
     }
 
     public async Task<IElasticSearchResult> InsertManyAsync(string indexName, object[] items)
@@ -167,9 +170,12 @@ public class ElasticSearchManager : IElasticSearch
 
     private ElasticClient getElasticClient(string indexName)
     {
-        if (string.IsNullOrEmpty(indexName))
-            throw new ArgumentNullException(indexName, message: ElasticSearchMessages.IndexNameCannotBeNullOrEmpty);
+        // Previous code passed `indexName` (the VALUE) as paramName, throwing
+        // ArgumentNullException with a useless empty string as the parameter name.
+        // Also: empty string is not technically "null" so ArgumentException is the correct type.
+        if (string.IsNullOrWhiteSpace(indexName))
+            throw new ArgumentException(ElasticSearchMessages.IndexNameCannotBeNullOrEmpty, nameof(indexName));
 
-        return new ElasticClient(_connectionSettings);
+        return _client;
     }
 }

@@ -11,8 +11,8 @@ Entity hiyerarşisi tenant izolasyonunu yansıtır:
 | `User<TId>` | `TenantEntity` | Email, şifre hash/salt, authenticator tipi. Aynı email farklı tenant'larda var olabilir. |
 | `RefreshToken<TId, TUserId>` | `TenantEntity` | Tenant bazlı token yönetimi. Tenant silinince tüm token'lar tek sorguda iptal edilir. |
 | `UserOperationClaim<TId, TUserId, TOperationClaimId>` | `TenantEntity` | Tenant bazlı kullanıcı–izin eşleşmesi. |
-| `EmailAuthenticator<TUserId>` | `TenantEntity` | Email doğrulama kodu. |
-| `OtpAuthenticator<TUserId>` | `TenantEntity` | TOTP tabanlı 2FA. |
+| `EmailAuthenticator<TId>` | `TenantEntity` | Email doğrulama kodu. `TId` PK tipi (User'ın ID tipiyle aynı olması beklenir). |
+| `OtpAuthenticator<TId>` | `TenantEntity` | TOTP tabanlı 2FA. `SecretKey` ham — production'da column encryption önerilir. |
 | `OperationClaim<TId>` | `Entity` | İzin / rol kaydı. Platform genelinde ortaktır, tenant'a özgü değildir. |
 
 `TenantEntity` olan entity'lerin tablosunda `TenantId` sütunu fiziksel olarak bulunur. EF Core global query filter tüm SELECT sorgularına otomatik `WHERE TenantId = @currentTenantId` ekler.
@@ -65,12 +65,24 @@ AccessToken token = jwtHelper.CreateImpersonationToken(admin, operationClaims, t
 
 ## Hashing
 
+PBKDF2-HMAC-SHA512, 210.000 iterasyon (OWASP 2024 minimum). Eski HMACSHA512 hash'leri
+salt boyutundan otomatik tespit edilip backward-compat verify ile çalışmaya devam eder.
+
 ```csharp
-// Şifre hash'leme
+// Şifre hash'leme (yeni format)
 HashingHelper.CreatePasswordHash("password", out byte[] hash, out byte[] salt);
 
-// Doğrulama
+// Doğrulama (PBKDF2 + legacy HMACSHA512 otomatik destekli)
 bool ok = HashingHelper.VerifyPasswordHash("password", hash, salt);
+
+// Login handler'ında lazy migration:
+if (ok && HashingHelper.IsLegacyHash(user.PasswordSalt))
+{
+    HashingHelper.CreatePasswordHash(plainPassword, out var newHash, out var newSalt);
+    user.PasswordHash = newHash;
+    user.PasswordSalt = newSalt;
+    await userRepo.UpdateAsync(user);
+}
 ```
 
 ## Authenticator'lar

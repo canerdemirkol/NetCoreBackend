@@ -323,7 +323,10 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
     {
         GuardValidId(entity);
         GuardTenantOwnership(entity);
-        SetEntityAsDeleted(entity, permanent, isAsync: false).Wait();
+        // .Wait() wraps thrown exceptions in AggregateException, obscuring the originals.
+        // .GetAwaiter().GetResult() preserves the original exception type. The async path
+        // is invoked with isAsync:false, so no real I/O occurs synchronously.
+        SetEntityAsDeleted(entity, permanent, isAsync: false).GetAwaiter().GetResult();
         Context.SaveChanges();
         return entity;
     }
@@ -332,7 +335,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
     {
         GuardValidId(entities);
         GuardTenantOwnership(entities);
-        SetEntityAsDeleted(entities, permanent, isAsync: false).Wait();
+        SetEntityAsDeleted(entities, permanent, isAsync: false).GetAwaiter().GetResult();
         Context.SaveChanges();
         return entities;
     }
