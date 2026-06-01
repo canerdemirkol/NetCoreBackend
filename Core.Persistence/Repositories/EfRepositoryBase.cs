@@ -221,6 +221,8 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
     )
     {
         IQueryable<TEntity> queryable = Query();
+        if (include != null)
+            queryable = include(queryable);
         if (withDeleted)
             queryable = queryable.IgnoreQueryFilters();
         if (predicate != null)
@@ -247,7 +249,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
 
     public TEntity Update(TEntity entity)
     {
-        EditEntityPropertiesToAdd(entity);
+        EditEntityPropertiesToUpdate(entity);
         Context.Update(entity);
         Context.SaveChanges();
         return entity;
@@ -256,7 +258,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
     public ICollection<TEntity> UpdateRange(ICollection<TEntity> entities)
     {
         foreach (TEntity entity in entities)
-            EditEntityPropertiesToAdd(entity);
+            EditEntityPropertiesToUpdate(entity);
         Context.UpdateRange(entities);
         Context.SaveChanges();
         return entities;
@@ -346,6 +348,8 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
     )
     {
         IQueryable<TEntity> queryable = Query();
+        if (include != null)
+            queryable = include(queryable);
         if (withDeleted)
             queryable = queryable.IgnoreQueryFilters();
         if (predicate != null)
