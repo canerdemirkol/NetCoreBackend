@@ -1,5 +1,4 @@
-﻿using System.Collections.Immutable;
-using System.Data;
+using System.Collections.Immutable;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -20,30 +19,8 @@ public class JwtHelper<TUserId, TOperationClaimId, TRefreshTokenId> : ITokenHelp
     }
 
     public virtual AccessToken CreateToken(User<TUserId> user, IList<OperationClaim<TOperationClaimId>> operationClaims)
-        => CreateToken(user, operationClaims, tenantId: null, isSuperAdmin: false, isImpersonating: false);
-
-    public virtual AccessToken CreateToken(
-        User<TUserId> user,
-        IList<OperationClaim<TOperationClaimId>> operationClaims,
-        Guid? tenantId,
-        bool isSuperAdmin = false,
-        bool isImpersonating = false)
     {
-        DateTime accessTokenExpiration = DateTime.Now.AddMinutes(_tokenOptions.AccessTokenExpiration);
-        SecurityKey securityKey = SecurityKeyHelper.CreateSecurityKey(_tokenOptions.SecurityKey);
-        SigningCredentials signingCredentials = SigningCredentialsHelper.CreateSigningCredentials(securityKey);
-        JwtSecurityToken jwt = new JwtSecurityToken(
-            _tokenOptions.Issuer,
-            _tokenOptions.Audience,
-            expires: accessTokenExpiration,
-            notBefore: DateTime.Now,
-            claims: SetClaims(user, operationClaims, tenantId, isSuperAdmin, isImpersonating),
-            signingCredentials: signingCredentials
-        );
-        JwtSecurityTokenHandler jwtSecurityTokenHandler = new();
-        string? token = jwtSecurityTokenHandler.WriteToken(jwt);
-
-        return new AccessToken() { Token = token, ExpirationDate = accessTokenExpiration };
+        return BuildAccessToken(SetClaims(user, operationClaims));
     }
 
     public RefreshToken<TRefreshTokenId, TUserId> CreateRefreshToken(User<TUserId> user, string ipAddress)
@@ -51,51 +28,74 @@ public class JwtHelper<TUserId, TOperationClaimId, TRefreshTokenId> : ITokenHelp
         return new RefreshToken<TRefreshTokenId, TUserId>()
         {
             UserId = user.Id,
-            Token = randomRefreshToken(),
+            Token = RandomRefreshToken(),
             ExpirationDate = DateTime.UtcNow.AddDays(_tokenOptions.RefreshTokenTTL),
             CreatedByIp = ipAddress
         };
     }
 
-    public virtual JwtSecurityToken CreateJwtSecurityToken(
-        TokenOptions tokenOptions,
-        User<TUserId> user,
-        SigningCredentials signingCredentials,
-        IList<OperationClaim<TOperationClaimId>> operationClaims,
-        DateTime accessTokenExpiration
-    )
+    public virtual AccessToken CreateAdminToken(
+        PlatformAdmin<TUserId> admin,
+        IList<OperationClaim<TOperationClaimId>> operationClaims)
     {
-        return new JwtSecurityToken(
-            tokenOptions.Issuer,
-            tokenOptions.Audience,
-            expires: accessTokenExpiration,
-            notBefore: DateTime.Now,
-            claims: SetClaims(user, operationClaims),
-            signingCredentials: signingCredentials
-        );
+        return BuildAccessToken(SetAdminClaims(admin, operationClaims, tenantId: null, isImpersonating: false));
     }
 
-    protected virtual IEnumerable<Claim> SetClaims(User<TUserId> user, IList<OperationClaim<TOperationClaimId>> operationClaims)
-        => SetClaims(user, operationClaims, tenantId: null, isSuperAdmin: false, isImpersonating: false);
+    public virtual AccessToken CreateImpersonationToken(
+        PlatformAdmin<TUserId> admin,
+        IList<OperationClaim<TOperationClaimId>> operationClaims,
+        Guid tenantId)
+    {
+        return BuildAccessToken(SetAdminClaims(admin, operationClaims, tenantId, isImpersonating: true));
+    }
 
     protected virtual IEnumerable<Claim> SetClaims(
         User<TUserId> user,
+        IList<OperationClaim<TOperationClaimId>> operationClaims)
+    {
+        List<Claim> claims = [];
+        claims.AddNameIdentifier(user.Id!.ToString()!);
+        claims.AddEmail(user.Email);
+        claims.AddRoles(operationClaims.Select(c => c.Name).ToArray());
+        claims.AddTenantId(user.TenantId);
+        claims.AddIsSuperAdmin(false);
+        claims.AddIsImpersonating(false);
+        return claims.ToImmutableList();
+    }
+
+    protected virtual IEnumerable<Claim> SetAdminClaims(
+        PlatformAdmin<TUserId> admin,
         IList<OperationClaim<TOperationClaimId>> operationClaims,
         Guid? tenantId,
-        bool isSuperAdmin,
         bool isImpersonating)
     {
         List<Claim> claims = [];
-        claims.AddNameIdentifier(user!.Id!.ToString()!);
-        claims.AddEmail(user.Email);
+        claims.AddNameIdentifier(admin.Id!.ToString()!);
+        claims.AddEmail(admin.Email);
         claims.AddRoles(operationClaims.Select(c => c.Name).ToArray());
         claims.AddTenantId(tenantId);
-        claims.AddIsSuperAdmin(isSuperAdmin);
+        claims.AddIsSuperAdmin(true);
         claims.AddIsImpersonating(isImpersonating);
         return claims.ToImmutableList();
     }
 
-    private string randomRefreshToken()
+    private AccessToken BuildAccessToken(IEnumerable<Claim> claims)
+    {
+        DateTime expiration = DateTime.Now.AddMinutes(_tokenOptions.AccessTokenExpiration);
+        SecurityKey securityKey = SecurityKeyHelper.CreateSecurityKey(_tokenOptions.SecurityKey);
+        SigningCredentials signingCredentials = SigningCredentialsHelper.CreateSigningCredentials(securityKey);
+        JwtSecurityToken jwt = new(
+            _tokenOptions.Issuer,
+            _tokenOptions.Audience,
+            expires: expiration,
+            notBefore: DateTime.Now,
+            claims: claims,
+            signingCredentials: signingCredentials
+        );
+        return new AccessToken { Token = new JwtSecurityTokenHandler().WriteToken(jwt), ExpirationDate = expiration };
+    }
+
+    private string RandomRefreshToken()
     {
         byte[] numberByte = new byte[32];
         using var random = RandomNumberGenerator.Create();

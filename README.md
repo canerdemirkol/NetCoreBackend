@@ -96,6 +96,9 @@ public class ProductRepository : EfRepositoryBase<Product, Guid, AppDbContext>
 ### Multi-Tenancy
 See [TENANT.md](./TENANT.md) for full multi-tenancy documentation.
 
+### Authentication & Impersonation
+See [AUTH.md](./AUTH.md) for the two-track authentication system (tenant users vs PlatformAdmin), impersonation flow, and consuming app implementation guide.
+
 ---
 
 ## Getting Started

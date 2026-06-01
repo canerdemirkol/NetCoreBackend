@@ -113,6 +113,38 @@ TenantClaimTypes.IsImpersonating // "is_impersonating"
 GeneralOperationClaims.Admin     // "Admin"
 ```
 
+## PlatformAdmin
+
+Tenant dışı platform yöneticisi. `Entity<TId>`'den türer — `TenantId` sütunu yoktur, EF Core query filter hiç uygulanmaz.
+
+```csharp
+public class PlatformAdmin<TId> : Entity<TId>
+{
+    public string Email { get; set; }
+    public byte[] PasswordSalt { get; set; }
+    public byte[] PasswordHash { get; set; }
+}
+```
+
+Normal `User<TId>` ile aynı tabloda değildir. Consuming app'te ayrı bir `PlatformAdmins` tablosuna map edilir.
+
+## JWT — Admin ve Impersonation Token'ları
+
+```csharp
+ITokenHelper<TUserId, TOperationClaimId, TRefreshTokenId>
+
+// Tenant kullanıcı (var olan)
+AccessToken token = tokenHelper.CreateToken(user, claims);
+
+// PlatformAdmin — is_super_admin: true, tenant_id yok
+AccessToken token = tokenHelper.CreateAdminToken(admin, claims);
+
+// Impersonation — is_super_admin: true + tenant_id + is_impersonating: true
+AccessToken token = tokenHelper.CreateImpersonationToken(admin, claims, tenantId);
+```
+
+Detaylı akış ve consuming app implementasyonu: [AUTH.md](../AUTH.md)
+
 ## AuthenticatorType Enum
 
 ```
