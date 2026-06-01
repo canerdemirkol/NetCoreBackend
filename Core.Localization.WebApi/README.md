@@ -6,7 +6,7 @@ HTTP `Accept-Language` header'ından locale tespiti yapan middleware.
 
 ```csharp
 // Program.cs
-app.UseLocalizationMiddleware();
+app.UseResponseLocalization();
 ```
 
 ## Nasıl Çalışır
@@ -35,7 +35,7 @@ GET /api/products
 app.UseRouting();
 app.UseAuthentication();
 app.UseMultiTenancy();        // TenantContext.DefaultLocale set edilir
-app.UseLocalizationMiddleware(); // DefaultLocale'i okur
+app.UseResponseLocalization(); // DefaultLocale'i okur
 app.UseAuthorization();
 app.MapControllers();
 ```

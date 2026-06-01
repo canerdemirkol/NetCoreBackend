@@ -35,8 +35,8 @@ public class LogDetailWithException : LogDetail
 ```csharp
 public class LogParameter
 {
-    public string Name { get; set; }    // Parametre adı
-    public object? Value { get; set; } // Parametre değeri
+    public string Name { get; set; }   // Parametre adı
+    public object Value { get; set; }  // Parametre değeri
     public string Type { get; set; }   // .NET tip adı
 }
 ```
@@ -49,11 +49,9 @@ Serilog file sink konfigürasyonu:
 {
   "FileLogConfiguration": {
     "FolderPath": "Logs",
-    "MinimumLogEventLevel": "Warning",
-    "OutputTemplate": "[{Timestamp:yyyy-MM-dd HH:mm:ss}] [{Level}] {Message}{NewLine}{Exception}",
-    "SpecificFolderPaths": {
-      "UserService": "Logs/UserService"
-    }
+    "MinLogLevel": "Warning",
+    "LogOutputTemplate": "[{Timestamp:dd.MM.yyyy HH:mm:ss}] [{Level:u3}] {Message:lj}{NewLine}{Exception}",
+    "SpecificLogFolders": ["Logs/UserService", "Logs/OrderService"]
   }
 }
 ```

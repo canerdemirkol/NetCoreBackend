@@ -7,12 +7,12 @@ Logger arayüzü. Tüm loglama implementasyonlarının uyması gereken contract.
 ```csharp
 public interface ILogger
 {
-    void Trace(LogDetail logDetail);
-    void Debug(LogDetail logDetail);
-    void Information(LogDetail logDetail);
-    void Warning(LogDetail logDetail);
-    void Error(LogDetailWithException logDetail);
-    void Critical(LogDetailWithException logDetail);
+    void Trace(string message);
+    void Debug(string message);
+    void Information(string message);
+    void Warning(string message);
+    void Error(string message);
+    void Critical(string message);
 }
 ```
 
@@ -28,12 +28,7 @@ public class MyService
 
     public void DoWork()
     {
-        _logger.Information(new LogDetail
-        {
-            FullName = nameof(MyService),
-            MethodName = nameof(DoWork),
-            User = "system"
-        });
+        _logger.Information($"[{nameof(MyService)}.{nameof(DoWork)}] executed by system");
     }
 }
 ```

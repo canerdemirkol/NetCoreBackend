@@ -10,18 +10,18 @@ var amazonConfig = builder.Configuration
     .GetSection("AmazonTranslateConfiguration")
     .Get<AmazonTranslateConfiguration>()!;
 
-builder.Services.AddAmazonTranslate(amazonConfig);
+builder.Services.AddAmazonTranslation(amazonConfig);
 ```
 
-`AddAmazonTranslate`, `AmazonTranslateLocalizationManager`'ı `ITranslationService` olarak **transient** kaydeder.
+`AddAmazonTranslation`, `AmazonTranslateLocalizationManager`'ı `ITranslationService` olarak **transient** kaydeder.
 
 ## Tam Lokalizasyon Entegrasyonu
 
 ```csharp
 // YAML lokalizasyon yerine AWS Translate ile dinamik çeviri
-builder.Services.AddAmazonTranslate(amazonConfig);
+builder.Services.AddAmazonTranslation(amazonConfig);
 builder.Services.AddScoped<ILocalizationService, TranslateLocalizationManager>();
 
 // Middleware
-app.UseLocalizationMiddleware();
+app.UseResponseLocalization();
 ```

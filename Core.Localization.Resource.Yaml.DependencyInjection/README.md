@@ -6,7 +6,7 @@ YAML lokalizasyonunu DI container'a kaydeden extension metot.
 
 ```csharp
 // Program.cs
-builder.Services.AddYamlLocalization();
+builder.Services.AddYamlResourceLocalization();
 ```
 
 `ServiceCollectionResourceLocalizationManagerExtension`, `Features/*/Resources/Locales/*.{culture}.yaml` pattern'indeki dosyaları tarar ve `ResourceLocalizationManager`'ı `ILocalizationService` olarak scoped kaydeder.
@@ -15,7 +15,7 @@ builder.Services.AddYamlLocalization();
 
 ```csharp
 // Locale tespiti için middleware (Core.Localization.WebApi)
-app.UseLocalizationMiddleware();
+app.UseResponseLocalization();
 
 // Dil sıralaması: Accept-Language header'dan otomatik alınır
 // Örnek: Accept-Language: tr, en;q=0.9

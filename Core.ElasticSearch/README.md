@@ -40,11 +40,7 @@ await elasticSearch.InsertAsync(new ElasticSearchInsertUpdateModel
 });
 
 // Toplu ekleme
-await elasticSearch.InsertManyAsync(new ElasticSearchInsertManyModel
-{
-    IndexName = "products",
-    Items = productList.Cast<object>().ToArray()
-});
+await elasticSearch.InsertManyAsync("products", productList.Cast<object>().ToArray());
 
 // Güncelleme
 await elasticSearch.UpdateByElasticIdAsync(new ElasticSearchInsertUpdateModel

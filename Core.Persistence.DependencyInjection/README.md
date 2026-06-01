@@ -6,10 +6,12 @@ Veritabanı migration'larını otomatik uygulayan servisin DI kaydı.
 
 ```csharp
 // Program.cs
-builder.Services.AddDbMigrationApplier<AppDbContext>();
+builder.Services.AddDbMigrationApplier<AppDbContext>(
+    sp => sp.GetRequiredService<AppDbContext>()
+);
 ```
 
-`DbMigrationApplierManager<TDbContext>`, `IDbMigrationApplierService` olarak kaydedilir.
+`DbMigrationApplierManager<TDbContext>`, hem `IDbMigrationApplierService` hem de `IDbMigrationApplierService<TDbContext>` olarak transient kaydedilir. Factory parametresi servisi DI container'dan çekmek için kullanılır.
 
 ## Migration Uygulama
 
@@ -19,4 +21,4 @@ Servisi çalıştırmak için [`Core.Persistence.WebApi`](../Core.Persistence.We
 app.UseDbMigrationApplier();
 ```
 
-Bu, uygulama başlarken bekleyen migration'ları otomatik olarak çalıştırır (`Database.MigrateAsync()`).
+Bu, uygulama başlarken bekleyen migration'ları otomatik olarak çalıştırır (`Database.Migrate()`).

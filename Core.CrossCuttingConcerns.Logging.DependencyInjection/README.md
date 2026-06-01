@@ -6,19 +6,11 @@ Logger implementasyonunu DI container'a kaydeden extension metot.
 
 ```csharp
 // Program.cs — SerilogFileLogger ile
-builder.Services.AddSingleton<ILogger, SerilogFileLogger>(sp =>
-{
-    var config = sp.GetRequiredService<IConfiguration>();
-    return new SerilogFileLogger(
-        config.GetSection("FileLogConfiguration").Get<FileLogConfiguration>()!);
-});
+var fileLogConfig = builder.Configuration
+    .GetSection("FileLogConfiguration")
+    .Get<FileLogConfiguration>()!;
+
+builder.Services.AddLogging(new SerilogFileLogger(fileLogConfig));
 ```
 
-Ya da `ServiceCollectionLoggingExtensions` extension metodu aracılığıyla:
-
-```csharp
-builder.Services.AddLoggingServices(config.GetSection("FileLogConfiguration")
-    .Get<FileLogConfiguration>()!);
-```
-
-`ILogger` singleton olarak kaydedilir — tüm request'ler aynı logger instance'ını paylaşır.
+`ServiceCollectionLoggingExtensions.AddLogging(ILogger logger)` extension metodu verilen `ILogger` instance'ını singleton olarak kaydeder — tüm request'ler aynı logger instance'ını paylaşır.

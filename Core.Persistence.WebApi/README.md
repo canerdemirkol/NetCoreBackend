@@ -18,8 +18,8 @@ app.UseDbMigrationApplier();
 `ApplicationBuilderDbMigrationApplierExtensions.UseDbMigrationApplier()`:
 
 1. DI'dan tüm `IDbMigrationApplierService` implementasyonlarını resolve eder
-2. Her biri için `InitializeAsync()` çağırır
-3. `InitializeAsync()` → `DbContext.Database.MigrateAsync()` → bekleyen migration'lar uygulanır
+2. Her biri için `Initialize()` çağırır
+3. `Initialize()` → `DbContext.Database.Migrate()` (relational) veya `EnsureCreated()` (in-memory) → bekleyen migration'lar uygulanır
 
 ## Dikkat
 

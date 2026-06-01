@@ -23,10 +23,10 @@ Somut implementasyonlar bu sınıftan türetilir ve Serilog sink konfigürasyonu
 public class MyFileLogger : SerilogLoggerServiceBase
 {
     public MyFileLogger(FileLogConfiguration config)
-    {
-        Logger = new LoggerConfiguration()
+        : base(new LoggerConfiguration()
             .WriteTo.File(config.FolderPath)
-            .CreateLogger();
+            .CreateLogger())
+    {
     }
 }
 ```

@@ -6,7 +6,7 @@ ASP.NET Core Web API için global exception handling middleware ve RFC 7807 uyum
 
 ```csharp
 // Program.cs
-app.UseExceptionMiddleware(); // UseRouting'den önce
+app.ConfigureCustomExceptionMiddleware(); // UseRouting'den önce
 ```
 
 ## HTTP Yanıt Eşleştirme
@@ -44,7 +44,7 @@ app.UseExceptionMiddleware(); // UseRouting'den önce
 ## Middleware Pipeline
 
 ```
-UseExceptionMiddleware()   ← tüm exception'ları yakalar
+ConfigureCustomExceptionMiddleware()   ← tüm exception'ları yakalar
 UseRouting()
 UseAuthentication()
 UseAuthorization()

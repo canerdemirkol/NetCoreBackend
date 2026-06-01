@@ -7,12 +7,10 @@ Lokalizasyon servisi arayüzü. Tüm lokalizasyon implementasyonlarının uyduğ
 ```csharp
 public interface ILocalizationService
 {
-    IList<string> AcceptLocales { get; set; }  // Request'ten gelen dil listesi
+    ICollection<string>? AcceptLocales { get; set; }  // Request'ten gelen dil listesi
 
-    Task<string> GetLocalizedAsync(string key);
-    Task<string> GetLocalizedAsync(string key, IList<string> locales);
-    Task<string> GetLocalizedAsync(string key, string section);
-    Task<string> GetLocalizedAsync(string key, IList<string> locales, string section);
+    Task<string> GetLocalizedAsync(string key, string? keySection = null);
+    Task<string> GetLocalizedAsync(string key, ICollection<string> acceptLocales, string? keySection = null);
 }
 ```
 

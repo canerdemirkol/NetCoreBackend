@@ -7,7 +7,7 @@
 ```csharp
 public interface ITranslationService
 {
-    Task<string> TranslateAsync(string text, string targetLanguage, string? sourceLanguage = null);
+    Task<string> TranslateAsync(string text, string to, string from = "en");
 }
 ```
 
@@ -16,13 +16,13 @@ public interface ITranslationService
 ```csharp
 string translated = await translationService.TranslateAsync(
     text: "Hello World",
-    targetLanguage: "tr",
-    sourceLanguage: "en"   // null bırakılırsa otomatik tespit
+    to: "tr",
+    from: "en"   // varsayılan "en", belirtilmezse İngilizce kaynak kabul edilir
 );
 // → "Merhaba Dünya"
 ```
 
-`targetLanguage` ve `sourceLanguage` için BCP 47 dil kodları kullanılır (örn. `tr`, `en`, `de`, `fr`).
+`to` ve `from` parametreleri için BCP 47 dil kodları kullanılır (örn. `tr`, `en`, `de`, `fr`).
 
 ## Implementasyon
 

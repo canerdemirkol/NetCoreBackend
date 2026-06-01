@@ -89,6 +89,19 @@ Platform'un ortak verisi → Entity   (Countries, Currencies, OperationClaims, T
 
 ---
 
+## Tenant Entity Fields
+
+| Field | Type | Description |
+|---|---|---|
+| `Name` | `string` | Display name ("Acme Corp") |
+| `Identifier` | `string` | URL slug ("acme") — used for subdomain and header resolution |
+| `Domain` | `string?` | Custom domain ("app.acmecorp.com") |
+| `IsActive` | `bool` | Inactive tenants are rejected with 403 |
+| `PlanType` | `TenantPlanType` | Free / Basic / Pro / Enterprise |
+| `DefaultLocale` | `string?` | BCP 47 fallback locale ("tr", "de") — used when client sends no Accept-Language header |
+
+---
+
 ## EF Core Global Query Filter Setup
 
 In your application's `DbContext`, add the global filter to all `ITenantEntity` types:
@@ -128,21 +141,6 @@ public class AppDbContext : DbContext
     }
 }
 ```
-
----
-
-## JWT Claim Structure
-
-## Tenant Entity Fields
-
-| Field | Type | Description |
-|---|---|---|
-| `Name` | `string` | Display name ("Acme Corp") |
-| `Identifier` | `string` | URL slug ("acme") — used for subdomain and header resolution |
-| `Domain` | `string?` | Custom domain ("app.acmecorp.com") |
-| `IsActive` | `bool` | Inactive tenants are rejected with 403 |
-| `PlanType` | `TenantPlanType` | Free / Basic / Pro / Enterprise |
-| `DefaultLocale` | `string?` | BCP 47 fallback locale ("tr", "de") — used when client sends no Accept-Language header |
 
 ---
 
@@ -246,11 +244,15 @@ app.UseAuthorization();
 
 EF Core LINQ methods (GetListAsync, GetAsync, AddAsync, etc.) apply tenant isolation automatically. Raw SQL methods behave differently:
 
-| Method | EF Core Pipeline | Tenant Filter | Developer Responsibility |
-|---|---|---|---|
-| `ExecuteSqlCommand<T>` | ✅ via `DbSet.FromSqlRaw` | Applied automatically | None |
-| `ExecuteSqlRawAsync` | ❌ via `Database` | **Not applied** | Must include `WHERE TenantId = @p` |
-| `ExecuteStoredProcedureAsync` | ❌ via `Database` | **Not applied** | Stored proc must accept `@tenantId` |
+| Method | Sync / Async | EF Core Pipeline | Tenant Filter | Developer Responsibility |
+|---|---|---|---|---|
+| `ExecuteSqlCommand<T>` | **Sync** | ✅ `DbSet.FromSqlRaw` | Applied automatically | `TResult` must be a mapped entity type (not a DTO) |
+| `ExecuteSqlRawAsync` | Async | ❌ `Database` | **Not applied** | Must include `WHERE TenantId = @p0` |
+| `ExecuteStoredProcedureAsync` | Async | ❌ `Database` | **Not applied** | Proc must accept `@tenantId`; uses Oracle `BEGIN…END;` syntax |
+
+**`ExecuteSqlCommand<T>` constraint:** The type parameter `TResult` must satisfy `Entity<TEntityId>` — it maps to a DbSet registered in your context. It cannot project to arbitrary DTOs or scalar values. Use it only for SELECT queries that return full entity rows.
+
+**`ExecuteStoredProcedureAsync` database compatibility:** The implementation wraps the call as `BEGIN {procedure}; END;`, which is **Oracle PL/SQL syntax**. For **SQL Server** use `ExecuteSqlRawAsync("EXEC {procedure} @p0", ...)` directly. For **PostgreSQL** use `CALL {procedure}(...)`.
 
 `ExecuteSqlRawAsync` and `ExecuteStoredProcedureAsync` throw `InvalidOperationException` if called on a `TenantEntity` without an active tenant context (SuperAdmin is exempt). Use `CurrentTenantId` from `EfRepositoryBase` to build safe queries:
 

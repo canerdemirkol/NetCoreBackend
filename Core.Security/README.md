@@ -40,14 +40,14 @@ var user = await _userRepository.GetAsync(u => u.Email == request.Email);
 ```csharp
 JwtHelper<TUserId, TOperationClaimId, TRefreshTokenId>
 
-// Normal kullanıcı token'ı
-AccessToken token = jwtHelper.CreateToken(user, operationClaims, tenantId: tenant.Id);
+// Normal kullanıcı token'ı (tenant_id claim otomatik user.TenantId'den alınır)
+AccessToken token = jwtHelper.CreateToken(user, operationClaims);
 
-// SuperAdmin token'ı (tenant yok)
-AccessToken token = jwtHelper.CreateToken(user, operationClaims, tenantId: null, isSuperAdmin: true);
+// PlatformAdmin token'ı (is_super_admin: true, tenant_id yok)
+AccessToken token = jwtHelper.CreateAdminToken(admin, operationClaims);
 
-// SuperAdmin impersonation
-AccessToken token = jwtHelper.CreateToken(user, operationClaims, tenantId: targetId, isSuperAdmin: true, isImpersonating: true);
+// PlatformAdmin impersonation (is_super_admin: true + tenant_id + is_impersonating: true)
+AccessToken token = jwtHelper.CreateImpersonationToken(admin, operationClaims, tenantId);
 ```
 
 `TokenOptions` (appsettings.json):
@@ -76,13 +76,13 @@ bool ok = HashingHelper.VerifyPasswordHash("password", hash, salt);
 ## Authenticator'lar
 
 ```csharp
-// Email doğrulama kodu üretme
-string activationKey = EmailAuthenticatorHelper.GenerateEmailActivationKey();
-string code = await EmailAuthenticatorHelper.GenerateEmailActivationCodeAsync(key);
+// Email doğrulama kodu üretme (IEmailAuthenticatorHelper inject edilir)
+string activationKey = await emailAuthenticatorHelper.CreateEmailActivationKey();
+string code = await emailAuthenticatorHelper.CreateEmailActivationCode();
 
-// OTP (Google Authenticator uyumlu TOTP)
-string secret = OtpAuthenticatorHelper.GenerateSecretKey();
-bool valid = OtpAuthenticatorHelper.ValidateCode(secret, userEnteredCode);
+// OTP (Google Authenticator uyumlu TOTP — IOtpAuthenticatorHelper inject edilir)
+byte[] secretKey = await otpAuthenticatorHelper.GenerateSecretKey();
+bool valid = await otpAuthenticatorHelper.VerifyCode(secretKey, userEnteredCode);
 ```
 
 ## Claim Extension'ları
@@ -100,7 +100,6 @@ claims.AddIsImpersonating(false);
 Guid? tenantId = user.GetTenantId();
 bool isSuperAdmin = user.IsSuperAdmin();
 bool isImpersonating = user.IsImpersonating();
-string? email = user.GetEmail();
 ```
 
 ## Sabitler

@@ -6,13 +6,19 @@
 
 ```csharp
 // Program.cs
-builder.Services.AddSecurityServices();
+var tokenOptions = builder.Configuration
+    .GetSection("TokenOptions")
+    .Get<TokenOptions>()!;
+
+builder.Services.AddSecurityServices<Guid, Guid, Guid>(tokenOptions);
 ```
+
+Generic parametreler sırasıyla: `TUserId`, `TOperationClaimId`, `TRefreshTokenId`. Uygulamanızdaki entity ID tipine göre değiştirin.
 
 Kaydedilen servisler:
 
-| Servis | Yaşam Döngüsü |
-|---|---|
-| `JwtHelper` | Scoped |
-| `EmailAuthenticatorHelper` | Scoped |
-| `OtpAuthenticatorHelper` | Scoped |
+| Arayüz | İmplementasyon | Yaşam Döngüsü |
+|---|---|---|
+| `ITokenHelper<TUserId, TOperationClaimId, TRefreshTokenId>` | `JwtHelper<...>` | Scoped |
+| `IEmailAuthenticatorHelper` | `EmailAuthenticatorHelper` | Scoped |
+| `IOtpAuthenticatorHelper` | `OtpNetOtpAuthenticatorHelper` | Scoped |
