@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>NetCoreBackend.NArchitecture.$(AssemblyName)</RootNamespace>
@@ -20,7 +20,6 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Http" />
     <PackageReference Include="Microsoft.AspNetCore.Http.Extensions" />
-    <PackageReference Include="System.Text.Encodings.Web" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Core.Localization.Abstraction\Core.Localization.Abstraction.csproj" />

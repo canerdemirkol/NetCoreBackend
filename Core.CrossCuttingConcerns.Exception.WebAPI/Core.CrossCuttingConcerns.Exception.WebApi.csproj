@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-	<TargetFramework>net9.0</TargetFramework>
+	<TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>NetCoreBackend.NArchitecture.$(AssemblyName)</RootNamespace>
@@ -22,7 +22,6 @@
     <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions"/>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Core"/>
     <PackageReference Include="Newtonsoft.Json"/>
-    <PackageReference Include="System.Text.Encodings.Web"/>
   </ItemGroup>
 
   <ItemGroup>

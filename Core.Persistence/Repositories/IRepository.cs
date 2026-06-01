@@ -53,5 +53,5 @@ public interface IRepository<TEntity, TEntityId> : IQuery<TEntity>
 
     ICollection<TEntity> DeleteRange(ICollection<TEntity> entities, bool permanent = false);
 
-    IList<TEntity> ExecuteSqlCommand<TEntity>(string sql, object[] parameters = null) where TEntity : Entity<TEntityId>, new();
+    IList<TResult> ExecuteSqlCommand<TResult>(string sql, object[]? parameters = null) where TResult : Entity<TEntityId>, new();
 }

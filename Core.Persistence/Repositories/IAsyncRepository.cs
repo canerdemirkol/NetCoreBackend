@@ -61,6 +61,6 @@ public interface IAsyncRepository<TEntity, TEntityId> : IQuery<TEntity>
         CancellationToken cancellationToken = default
     );
 
-    Task<int> ExecuteSqlRawAsync(string sql, object[] parameters = null);
-    Task<int> ExecuteStoredProcedureAsync(string procedure, object[] parameters = null);
+    Task<int> ExecuteSqlRawAsync(string sql, object[]? parameters = null);
+    Task<int> ExecuteStoredProcedureAsync(string procedure, object[]? parameters = null);
 }

@@ -27,19 +27,19 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
     {
         return Context.Set<TEntity>();
     }
-    public IList<TEntity> ExecuteSqlCommand<TEntity>(string sql, object[] parameters = null) where TEntity : Entity<TEntityId>, new()
+    public IList<TResult> ExecuteSqlCommand<TResult>(string sql, object[]? parameters = null) where TResult : Entity<TEntityId>, new()
     {
         if (parameters is null)
         {
-            return Context.Set<TEntity>().FromSqlRaw(sql).ToList();
+            return Context.Set<TResult>().FromSqlRaw(sql).ToList();
         }
         else
         {
-            return Context.Set<TEntity>().FromSqlRaw(sql, parameters).ToList();
+            return Context.Set<TResult>().FromSqlRaw(sql, parameters).ToList();
         }
     }
 
-    public async Task<int> ExecuteSqlRawAsync(string sql, object[] parameters = null)
+    public async Task<int> ExecuteSqlRawAsync(string sql, object[]? parameters = null)
     {
 
         int result = parameters == null
@@ -50,7 +50,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
         return result;
     }
 
-    public async Task<int> ExecuteStoredProcedureAsync(string procedure, object[] parameters = null)
+    public async Task<int> ExecuteStoredProcedureAsync(string procedure, object[]? parameters = null)
     {
         string command = $"BEGIN {procedure}; END;";
         int result = parameters == null

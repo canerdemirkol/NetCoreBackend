@@ -29,7 +29,7 @@ public static class IQueryableDynamicFilterExtensions
     public static IQueryable<T> ToDynamic<T>(this IQueryable<T> query, DynamicQuery dynamicQuery)
     {
         // Test
-        Console.WriteLine(dynamicQuery.Filter.Value);
+        Console.WriteLine(dynamicQuery.Filter?.Value);
         if (dynamicQuery.Filter is not null)
             query = Filter(query, dynamicQuery.Filter);
         if (dynamicQuery.Sort is not null && dynamicQuery.Sort.Any())
@@ -46,12 +46,12 @@ public static class IQueryableDynamicFilterExtensions
             if (f.Operator == "in")
             {
                 Console.WriteLine(f.Value);
-                var inValues = f.Value.Split(',').Select(v => v.Trim());
+                var inValues = f.Value!.Split(',').Select(v => v.Trim());
                 values.AddRange(inValues);
             }
             else if (f.Operator == "between")
             {
-                var betweenValues = f.Value.Split(',');
+                var betweenValues = f.Value!.Split(',');
                 if (betweenValues.Length != 2)
                     throw new ArgumentException("Invalid Value for 'between' operator");
 
@@ -59,7 +59,7 @@ public static class IQueryableDynamicFilterExtensions
             }
             else
             {
-                values.Add(f.Value);
+                values.Add(f.Value!);
             }
         }
 
