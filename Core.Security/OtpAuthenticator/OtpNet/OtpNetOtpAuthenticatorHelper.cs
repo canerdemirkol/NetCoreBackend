@@ -24,9 +24,11 @@ public class OtpNetOtpAuthenticatorHelper : IOtpAuthenticatorHelper
     {
         Totp totp = new(secretKey);
 
-        string totpCode = totp.ComputeTotp(DateTime.UtcNow);
-
-        bool result = totpCode == code;
+        // Accept codes from the previous and next 30s window to tolerate clock skew and
+        // the common UX race where the user submits a code at the very edge of its validity.
+        // RFC 6238 §5.2 explicitly recommends a small look-ahead/look-back window.
+        VerificationWindow window = new(previous: 1, future: 1);
+        bool result = totp.VerifyTotp(DateTime.UtcNow, code, out _, window);
         return Task.FromResult(result);
     }
 }

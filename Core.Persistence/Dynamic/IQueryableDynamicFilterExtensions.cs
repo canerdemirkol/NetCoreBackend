@@ -1,4 +1,6 @@
-﻿using System.Linq.Dynamic.Core;
+﻿using System.Collections.Concurrent;
+using System.Linq.Dynamic.Core;
+using System.Reflection;
 using System.Text;
 
 namespace NetCoreBackend.NArchitecture.Core.Persistence.Dynamic;
@@ -7,6 +9,31 @@ public static class IQueryableDynamicFilterExtensions
 {
     private static readonly string[] _orders = { "asc", "desc" };
     private static readonly string[] _logics = { "and", "or" };
+
+    // Cache of allowed (filterable/sortable) public property names per entity type. Lookups happen
+    // on the hot path; reflection on every request would dominate query-build cost.
+    private static readonly ConcurrentDictionary<Type, HashSet<string>> _filterableProperties = new();
+
+    private static HashSet<string> GetFilterableProperties(Type type) =>
+        _filterableProperties.GetOrAdd(type, t =>
+            t.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Where(p => p.GetCustomAttribute<NotFilterableAttribute>() is null)
+                .Select(p => p.Name)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase));
+
+    // Validates that the root segment of a (potentially nested, "Customer.Name") property path
+    // is a public, filter-allowed property on T. Blocks attempts to filter/sort on
+    // [NotFilterable] columns (e.g. PasswordHash) or to slip arbitrary expressions past the
+    // Linq.Dynamic.Core parser.
+    private static void GuardField<T>(string field)
+    {
+        if (string.IsNullOrEmpty(field))
+            throw new ArgumentException("Invalid Field");
+
+        string root = field.Split('.')[0];
+        if (!GetFilterableProperties(typeof(T)).Contains(root))
+            throw new ArgumentException($"Field '{field}' is not a filterable property of '{typeof(T).Name}'.");
+    }
 
     private static readonly IDictionary<string, string> _operators = new Dictionary<string, string>
     {
@@ -37,6 +64,9 @@ public static class IQueryableDynamicFilterExtensions
 
     private static IQueryable<T> Filter<T>(IQueryable<T> queryable, Filter filter)
     {
+        foreach (Filter f in GetAllFilters(filter))
+            GuardField<T>(f.Field);
+
         IList<Filter> filters = GetAllFilters(filter);
         var values = new List<object>();
         foreach (var f in filters)
@@ -73,8 +103,7 @@ public static class IQueryableDynamicFilterExtensions
     {
         foreach (Sort item in sort)
         {
-            if (string.IsNullOrEmpty(item.Field))
-                throw new ArgumentException("Invalid Field");
+            GuardField<T>(item.Field);
             if (string.IsNullOrEmpty(item.Dir) || !_orders.Contains(item.Dir))
                 throw new ArgumentException("Invalid Order Type");
         }

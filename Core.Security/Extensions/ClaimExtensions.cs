@@ -40,6 +40,11 @@ public static class ClaimExtensions
             claims.Add(new Claim(TenantClaimTypes.TenantId, tenantId.Value.ToString()));
     }
 
+    // Convention for boolean security flag claims: emit only when true; absence == false.
+    // Keeps the JWT compact (most tokens belong to regular users where both are false) and
+    // matches the .NET/IdentityServer convention. Consumers MUST therefore use IsSuperAdmin()
+    // / IsImpersonating() extension methods and not raw claim lookups, which would interpret
+    // "missing" as "unknown" rather than "false".
     public static void AddIsSuperAdmin(this ICollection<Claim> claims, bool isSuperAdmin)
     {
         if (isSuperAdmin)

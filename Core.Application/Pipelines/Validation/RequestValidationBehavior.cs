@@ -1,4 +1,5 @@
 ﻿using FluentValidation;
+using FluentValidation.Results;
 using MediatR;
 using NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.Exception.Types;
 using ValidationException = NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.Exception.Types.ValidationException;
@@ -21,9 +22,15 @@ public class RequestValidationBehavior<TRequest, TResponse> : IPipelineBehavior<
         CancellationToken cancellationToken
     )
     {
-        ValidationContext<TRequest> context = new(request);
-        IEnumerable<ValidationExceptionModel> errors = _validators
-            .Select(validator => validator.Validate(context))
+        // Each validator gets its own ValidationContext: FluentValidation's context carries
+        // mutable per-run state (PropertyChain, RuleSet, RootContextData) that would corrupt
+        // if shared across concurrent ValidateAsync calls. Async execution still pays off
+        // because individual validators can run I/O-bound rules without blocking a thread.
+        ValidationResult[] results = await Task.WhenAll(
+            _validators.Select(v => v.ValidateAsync(new ValidationContext<TRequest>(request), cancellationToken))
+        );
+
+        IEnumerable<ValidationExceptionModel> errors = results
             .SelectMany(result => result.Errors)
             .Where(failure => failure != null)
             .GroupBy(
@@ -35,7 +42,7 @@ public class RequestValidationBehavior<TRequest, TResponse> : IPipelineBehavior<
 
         if (errors.Any())
             throw new ValidationException(errors);
-        TResponse response = await next();
+        TResponse response = await next(cancellationToken);
         return response;
     }
 }

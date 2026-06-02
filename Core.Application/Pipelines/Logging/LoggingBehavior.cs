@@ -34,13 +34,13 @@ public class LoggingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, 
 
         LogDetail logDetail = new()
         {
-            MethodName = next.Method.Name,
+            MethodName = request.GetType().Name,
             Parameters = logParameters,
             User = _httpContextAccessor.HttpContext?.User.Identity?.Name ?? "?",
             TenantId = tenantId?.ToString()
         };
 
         _logger.Information(JsonSerializer.Serialize(logDetail));
-        return await next();
+        return await next(cancellationToken);
     }
 }

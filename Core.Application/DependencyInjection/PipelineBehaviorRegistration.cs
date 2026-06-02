@@ -1,5 +1,7 @@
 using MediatR;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using NetCoreBackend.NArchitecture.Core.Application.Pipelines.Authorization;
 using NetCoreBackend.NArchitecture.Core.Application.Pipelines.Caching;
 using NetCoreBackend.NArchitecture.Core.Application.Pipelines.Logging;
@@ -21,6 +23,12 @@ public static class PipelineBehaviorRegistration
 {
     public static IServiceCollection AddNArchitecturePipelineBehaviors(this IServiceCollection services)
     {
+        // Pipeline behaviors below depend on IHttpContextAccessor. ASP.NET Core's host adds it
+        // by default, but worker hosts or test harnesses don't — this idempotent registration
+        // removes an "InvalidOperationException: Unable to resolve service" footgun for those
+        // callers. TryAdd is a no-op when the consumer already registered it.
+        services.TryAddSingleton<IHttpContextAccessor, HttpContextAccessor>();
+
         // Order matters: registrations resolved in the order they appear here, so guard-style
         // behaviors (auth, validation) run before side-effecting ones (caching, transactions).
         services.AddScoped(typeof(IPipelineBehavior<,>), typeof(AuthorizationBehavior<,>));

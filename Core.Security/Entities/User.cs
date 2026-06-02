@@ -1,4 +1,5 @@
-﻿using NetCoreBackend.NArchitecture.Core.Persistence.Repositories;
+﻿using NetCoreBackend.NArchitecture.Core.Persistence.Dynamic;
+using NetCoreBackend.NArchitecture.Core.Persistence.Repositories;
 using NetCoreBackend.NArchitecture.Core.Security.Enums;
 
 namespace NetCoreBackend.NArchitecture.Core.Security.Entities;
@@ -6,8 +7,8 @@ namespace NetCoreBackend.NArchitecture.Core.Security.Entities;
 public class User<TId> : TenantEntity<TId>
 {
     public string Email { get; set; }
-    public byte[] PasswordSalt { get; set; }
-    public byte[] PasswordHash { get; set; }
+    [NotFilterable] public byte[] PasswordSalt { get; set; }
+    [NotFilterable] public byte[] PasswordHash { get; set; }
     public AuthenticatorType AuthenticatorType { get; set; }
 
     public User()

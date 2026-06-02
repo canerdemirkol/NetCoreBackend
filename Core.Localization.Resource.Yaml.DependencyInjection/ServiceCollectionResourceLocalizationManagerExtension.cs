@@ -36,8 +36,14 @@ public static class ServiceCollectionResourceLocalizationManagerExtension
                     string[] localeFiles = Directory.GetFiles(localeDir);
                     foreach (string localeFile in localeFiles)
                     {
+                        // Expected pattern: "{section}.{culture}.yaml" — reject files that don't
+                        // follow it instead of silently using the whole file name as the culture.
                         string localeName = Path.GetFileNameWithoutExtension(localeFile);
                         int separatorIndex = localeName.IndexOf('.');
+                        if (separatorIndex < 0 || separatorIndex == localeName.Length - 1)
+                            throw new InvalidOperationException(
+                                $"Locale file '{localeFile}' does not match the required '{{section}}.{{culture}}.yaml' naming pattern.");
+
                         string localeCulture = localeName[(separatorIndex + 1)..];
 
                         if (File.Exists(localeFile))

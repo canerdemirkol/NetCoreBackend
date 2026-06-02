@@ -59,10 +59,14 @@ public class SerilogFileLogger : SerilogLoggerServiceBase
         loggerConfig.WriteTo.Logger(lc => lc
             .Filter.ByExcluding(e =>
             {
-                // SpecificLogFolders'da tanımlı folder isimlerini içeren mesajları hariç tut
+                // Folder routing convention: callers prefix the message with "[Tag] …"
+                // (e.g. _logger.Error($"[GeneralLogs] …")). Match the prefix only, not any
+                // occurrence — substring matches would misroute messages whose payload
+                // happens to mention "[Tag]" in passing.
                 var message = e.RenderMessage();
                 return configuration?.SpecificLogFolders?.Any(folder =>
-                    !string.IsNullOrWhiteSpace(folder) && message.Contains($"[{folder}]")) ?? false;
+                    !string.IsNullOrWhiteSpace(folder)
+                    && message.StartsWith($"[{folder}]", StringComparison.Ordinal)) ?? false;
             })
             .WriteTo.File(
                 path: generalLogPath,
@@ -90,7 +94,7 @@ public class SerilogFileLogger : SerilogLoggerServiceBase
                 );
 
                 loggerConfig.WriteTo.Logger(lc => lc
-                    .Filter.ByIncludingOnly(e => e.RenderMessage().Contains($"[{logFolderName}]"))
+                    .Filter.ByIncludingOnly(e => e.RenderMessage().StartsWith($"[{logFolderName}]", StringComparison.Ordinal))
                     .WriteTo.File(
                         path: specificLogPath,
                         restrictedToMinimumLevel: minLogLevel,

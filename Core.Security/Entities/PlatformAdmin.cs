@@ -1,3 +1,4 @@
+using NetCoreBackend.NArchitecture.Core.Persistence.Dynamic;
 using NetCoreBackend.NArchitecture.Core.Persistence.Repositories;
 
 namespace NetCoreBackend.NArchitecture.Core.Security.Entities;
@@ -9,8 +10,8 @@ namespace NetCoreBackend.NArchitecture.Core.Security.Entities;
 public class PlatformAdmin<TId> : Entity<TId>
 {
     public string Email { get; set; }
-    public byte[] PasswordSalt { get; set; }
-    public byte[] PasswordHash { get; set; }
+    [NotFilterable] public byte[] PasswordSalt { get; set; }
+    [NotFilterable] public byte[] PasswordHash { get; set; }
 
     public PlatformAdmin()
     {

@@ -13,6 +13,12 @@ public class MailSettings
     public string? DkimSelector { get; set; }
     public string? DomainName { get; set; }
 
+    // Controls the TLS posture used by MailKit's SmtpClient.Connect.
+    // Default is StartTlsWhenAvailable so explicit submission (port 587/25) negotiates STARTTLS
+    // when the server advertises it and refuses to send credentials over plaintext via
+    // SmtpClient.CheckCertificateRevocation/AuthenticationMechanisms. For port 465 use SslOnConnect.
+    public MailTlsMode TlsMode { get; set; } = MailTlsMode.StartTlsWhenAvailable;
+
     public MailSettings()
     {
         Server = string.Empty;

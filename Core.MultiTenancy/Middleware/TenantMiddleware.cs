@@ -122,8 +122,20 @@ public class TenantMiddleware
 
     internal static string? ExtractSubdomain(string host)
     {
-        // Strip port (Host.Host should not include port, but defend anyway)
-        host = host.Split(':')[0];
+        // Bracketed IPv6 literal: "[::1]" or "[::1]:5000". Trim the brackets/port before
+        // any further parsing — splitting on ':' would corrupt the address.
+        if (host.StartsWith('['))
+        {
+            int close = host.IndexOf(']');
+            if (close < 0) return null;
+            host = host.Substring(1, close - 1);
+        }
+        else
+        {
+            // Strip port (Host.Host should not include port, but defend anyway)
+            int colon = host.IndexOf(':');
+            if (colon >= 0) host = host[..colon];
+        }
 
         // Numeric IPs never carry tenant info — "192.168.1.1" must not yield "192"
         if (IPAddress.TryParse(host, out _)) return null;

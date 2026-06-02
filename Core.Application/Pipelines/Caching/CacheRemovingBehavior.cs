@@ -38,9 +38,9 @@ public class CacheRemovingBehavior<TRequest, TResponse> : IPipelineBehavior<TReq
     )
     {
         if (request.BypassCache)
-            return await next();
+            return await next(cancellationToken);
 
-        TResponse response = await next();
+        TResponse response = await next(cancellationToken);
 
         if (request.CacheGroupKey != null)
             for (int i = 0; i < request.CacheGroupKey.Count(); i++)

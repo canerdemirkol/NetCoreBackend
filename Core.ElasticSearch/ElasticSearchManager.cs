@@ -42,6 +42,11 @@ public class ElasticSearchManager : IElasticSearch
 
     public async Task<IElasticSearchResult> InsertManyAsync(string indexName, object[] items)
     {
+        // Sending an empty Bulk request still incurs a round trip; short-circuit so callers
+        // that build the array conditionally don't have to add the same guard.
+        if (items is null || items.Length == 0)
+            return new ElasticSearchResult(success: true, message: ElasticSearchMessages.Success);
+
         ElasticClient elasticClient = getElasticClient(indexName);
         BulkResponse response = await elasticClient.BulkAsync(a => a.Index(indexName).IndexMany(items));
 
@@ -56,9 +61,12 @@ public class ElasticSearchManager : IElasticSearch
     public async Task<IElasticSearchResult> CreateNewIndexAsync(IndexModel indexModel)
     {
         ElasticClient elasticClient = getElasticClient(indexModel.IndexName);
-        if (elasticClient.Indices.Exists(indexModel.IndexName).Exists)
-            return new ElasticSearchResult(success: false, message: ElasticSearchMessages.IndexAlreadyExists);
 
+        // Exists-then-create is racy when two callers hit this concurrently: both observe "not
+        // exists" and both attempt create, leaving one with an Elasticsearch-side
+        // resource_already_exists_exception. Skip the existence pre-check and rely on the
+        // create response — any post-creation "already exists" is treated as success because
+        // the desired end-state is satisfied.
         CreateIndexResponse? response = await elasticClient.Indices.CreateAsync(
             indexModel.IndexName,
             selector: se =>
@@ -66,10 +74,14 @@ public class ElasticSearchManager : IElasticSearch
                     .Aliases(x => x.Alias(indexModel.AliasName))
         );
 
-        return new ElasticSearchResult(
-            response.IsValid,
-            message: response.IsValid ? ElasticSearchMessages.Success : response.ServerError?.Error?.Reason ?? response.DebugInformation
-        );
+        if (response.IsValid)
+            return new ElasticSearchResult(success: true, message: ElasticSearchMessages.Success);
+
+        bool alreadyExists = response.ServerError?.Error?.Type == "resource_already_exists_exception";
+        if (alreadyExists)
+            return new ElasticSearchResult(success: false, message: ElasticSearchMessages.IndexAlreadyExists);
+
+        return new ElasticSearchResult(success: false, message: response.ServerError?.Error?.Reason ?? response.DebugInformation);
     }
 
     public async Task<IElasticSearchResult> DeleteByElasticIdAsync(ElasticSearchModel model)
@@ -103,7 +115,10 @@ public class ElasticSearchManager : IElasticSearch
     {
         ElasticClient elasticClient = getElasticClient(fieldParameters.IndexName);
         ISearchResponse<T>? searchResponse = await elasticClient.SearchAsync<T>(s =>
-            s.Index(fieldParameters.IndexName).From(fieldParameters.From).Size(fieldParameters.Size)
+            s.Index(fieldParameters.IndexName)
+                .From(fieldParameters.From)
+                .Size(fieldParameters.Size)
+                .Query(q => q.Term(t => t.Field(fieldParameters.FieldName).Value(fieldParameters.Value)))
         );
 
         var list = searchResponse.Hits.Select(x => new ElasticSearchGetModel<T> { ElasticId = x.Id, Item = x.Source }).ToList();

@@ -34,6 +34,6 @@ public class SuperAdminBlockBehavior<TRequest, TResponse> : IPipelineBehavior<TR
                 "Impersonate the target tenant before retrying.");
         }
 
-        return await next();
+        return await next(cancellationToken);
     }
 }

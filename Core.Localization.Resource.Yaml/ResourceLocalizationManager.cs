@@ -84,10 +84,22 @@ public class ResourceLocalizationManager : ILocalizationService
         return null;
     }
 
+    // Hard ceiling on the size of a single localization YAML file. Resource files in this
+    // project are checked-in translation tables — a real one is measured in kilobytes, not
+    // megabytes. The cap is a defense-in-depth limit so a malicious or accidentally-massive
+    // file (zip-bomb-style expansion via aliases, runaway generator) cannot exhaust memory
+    // during startup.
+    private const long _maxResourceFileSizeBytes = 2 * 1024 * 1024; // 2 MiB
+
     private static YamlMappingNode? lazyLoadResource(string path)
     {
         if (!File.Exists(path))
             throw new FileNotFoundException($"Localization resource file not found: {path}", path);
+
+        long size = new FileInfo(path).Length;
+        if (size > _maxResourceFileSizeBytes)
+            throw new InvalidOperationException(
+                $"Localization resource file '{path}' is {size} bytes, exceeding the {_maxResourceFileSizeBytes}-byte limit.");
 
         using StreamReader reader = new(path);
         YamlStream yamlStream = [];

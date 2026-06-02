@@ -16,7 +16,7 @@ public class TransactionScopeBehavior<TRequest, TResponse> : IPipelineBehavior<T
         // (because next() or Complete() itself throws), Dispose rolls back. The previous explicit
         // Dispose() in a catch block duplicated the rollback and obscured the intent.
         using TransactionScope transactionScope = new(TransactionScopeAsyncFlowOption.Enabled);
-        TResponse response = await next();
+        TResponse response = await next(cancellationToken);
         transactionScope.Complete();
         return response;
     }

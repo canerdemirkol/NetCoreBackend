@@ -13,6 +13,9 @@ public static class SecurityServiceRegistration
         TokenOptions tokenOptions
     )
     {
+        ArgumentNullException.ThrowIfNull(tokenOptions);
+        tokenOptions.Validate();
+
         services.AddScoped<
             ITokenHelper<TUserId, TOperationClaimId, TRefreshTokenId>,
             JwtHelper<TUserId, TOperationClaimId, TRefreshTokenId>

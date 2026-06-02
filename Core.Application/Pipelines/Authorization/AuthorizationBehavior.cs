@@ -31,7 +31,7 @@ public class AuthorizationBehavior<TRequest, TResponse> : IPipelineBehavior<TReq
 
         // SuperAdmin bypasses all role checks
         if (user.IsSuperAdmin())
-            return await next();
+            return await next(cancellationToken);
 
         if (request.Roles.Any())
         {
@@ -52,7 +52,7 @@ public class AuthorizationBehavior<TRequest, TResponse> : IPipelineBehavior<TReq
                 throw new AuthorizationException("You are not authorized.");
         }
 
-        TResponse response = await next();
+        TResponse response = await next(cancellationToken);
         return response;
     }
 }

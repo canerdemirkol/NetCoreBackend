@@ -26,6 +26,9 @@ public static class HashingHelper
     /// </summary>
     public static void CreatePasswordHash(string password, out byte[] passwordHash, out byte[] passwordSalt)
     {
+        if (string.IsNullOrEmpty(password))
+            throw new ArgumentException("Password must not be null or empty.", nameof(password));
+
         passwordSalt = RandomNumberGenerator.GetBytes(Pbkdf2SaltSize);
         passwordHash = Rfc2898DeriveBytes.Pbkdf2(
             password: password,
@@ -41,6 +44,11 @@ public static class HashingHelper
     /// </summary>
     public static bool VerifyPasswordHash(string password, byte[] passwordHash, byte[] passwordSalt)
     {
+        if (string.IsNullOrEmpty(password))
+            throw new ArgumentException("Password must not be null or empty.", nameof(password));
+        ArgumentNullException.ThrowIfNull(passwordHash);
+        ArgumentNullException.ThrowIfNull(passwordSalt);
+
         if (passwordSalt.Length == LegacyHmacSaltSize)
         {
             // Legacy HMACSHA512 path — kept for backward compatibility. Mark these rows for

@@ -20,6 +20,7 @@
 	  <PackageReference Include="FluentValidation" />
 	  <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
 	  <PackageReference Include="MediatR" />
+	  <PackageReference Include="Microsoft.AspNetCore.Http" />
 	  <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" />
 	  <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
   </ItemGroup>

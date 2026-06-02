@@ -26,7 +26,11 @@ public class CachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, 
     {
         _cache = cache;
         _logger = logger;
-        _cacheSettings = configuration.GetSection("CacheSettings").Get<CacheSettings>() ?? throw new InvalidOperationException();
+        _cacheSettings = configuration.GetSection("CacheSettings").Get<CacheSettings>()
+            ?? throw new InvalidOperationException("CacheSettings section is missing from configuration.");
+        if (_cacheSettings.SlidingExpirationDays <= 0)
+            throw new InvalidOperationException(
+                $"CacheSettings.SlidingExpirationDays must be a positive number of days (was {_cacheSettings.SlidingExpirationDays}).");
         _httpContextAccessor = httpContextAccessor;
     }
 
@@ -50,18 +54,28 @@ public class CachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, 
     )
     {
         if (request.BypassCache)
-            return await next();
+            return await next(cancellationToken);
 
         string cacheKey = BuildCacheKey(request.CacheKey);
         TResponse response;
         byte[]? cachedResponse = await _cache.GetAsync(cacheKey, cancellationToken);
         if (cachedResponse != null)
         {
-            response = JsonSerializer.Deserialize<TResponse>(Encoding.UTF8.GetString(cachedResponse))!;
-            _logger.LogInformation($"Fetched from Cache -> {cacheKey}");
+            // A null deserialization result means the cached payload is incompatible with the
+            // current TResponse contract (schema change, type rename, etc.). Treat it as a miss
+            // and overwrite, rather than returning a silent null to the caller.
+            TResponse? deserialized = JsonSerializer.Deserialize<TResponse>(Encoding.UTF8.GetString(cachedResponse));
+            if (deserialized is not null)
+            {
+                _logger.LogInformation($"Fetched from Cache -> {cacheKey}");
+                return deserialized;
+            }
+
+            _logger.LogWarning("Cached value at {CacheKey} could not be deserialized into {ResponseType}; evicting.", cacheKey, typeof(TResponse).Name);
+            await _cache.RemoveAsync(cacheKey, cancellationToken);
         }
-        else
-            response = await getResponseAndAddToCache(request, cacheKey, next, cancellationToken);
+
+        response = await getResponseAndAddToCache(request, cacheKey, next, cancellationToken);
 
         return response;
     }
@@ -73,7 +87,7 @@ public class CachingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, 
         CancellationToken cancellationToken
     )
     {
-        TResponse response = await next();
+        TResponse response = await next(cancellationToken);
 
         TimeSpan slidingExpiration = request.SlidingExpiration ?? TimeSpan.FromDays(_cacheSettings.SlidingExpirationDays);
         DistributedCacheEntryOptions cacheOptions = new() { SlidingExpiration = slidingExpiration };

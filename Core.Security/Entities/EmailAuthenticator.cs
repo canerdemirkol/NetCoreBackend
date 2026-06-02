@@ -10,7 +10,16 @@ namespace NetCoreBackend.NArchitecture.Core.Security.Entities;
 public class EmailAuthenticator<TId> : TenantEntity<TId>
 {
     public TId UserId { get; set; }
+
+    // Activation key lifecycle:
+    //   - Issued: ActivationKey is non-null, ActivationKeyExpiresAt is set in the future.
+    //   - Consumed: ActivationKey nulled out and ActivationKeyConsumedAt stamped on first use.
+    //   - Expired: ExpiresAt in the past — verification handlers must reject and require reissue.
+    // Without ExpiresAt/ConsumedAt a leaked key could be redeemed indefinitely or replayed.
     public string? ActivationKey { get; set; }
+    public DateTime? ActivationKeyExpiresAt { get; set; }
+    public DateTime? ActivationKeyConsumedAt { get; set; }
+
     public bool IsVerified { get; set; }
 
     public EmailAuthenticator()

@@ -28,7 +28,7 @@ public class PerformanceBehavior<TRequest, TResponse> : IPipelineBehavior<TReque
         Stopwatch stopwatch = Stopwatch.StartNew();
         try
         {
-            return await next();
+            return await next(cancellationToken);
         }
         finally
         {

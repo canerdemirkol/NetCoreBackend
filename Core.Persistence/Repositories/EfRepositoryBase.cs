@@ -124,7 +124,15 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
     {
         entity.CreatedDate = DateTime.UtcNow;
         if (entity is ITenantEntity tenantEntity)
-            TenantSetter?.SetTenantId(tenantEntity);
+        {
+            // Fail-fast: without TenantSetter the row would be written with TenantId == default and
+            // become invisible to every tenant. Loud error beats silent data corruption.
+            if (TenantSetter is null)
+                throw new InvalidOperationException(
+                    $"Cannot add tenant entity '{typeof(TEntity).Name}': ITenantEntitySetter is not registered. " +
+                    "Call services.AddMultiTenancy() in the consuming application's DI setup.");
+            TenantSetter.SetTenantId(tenantEntity);
+        }
     }
 
     public async Task<TEntity> AddAsync(TEntity entity, CancellationToken cancellationToken = default)
@@ -377,8 +385,8 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
         if (predicate != null)
             queryable = queryable.Where(predicate);
         if (orderBy != null)
-            return orderBy(queryable).ToPaginate(index, size);
-        return queryable.ToPaginate(index, size);
+            return orderBy(queryable).ToPaginate(index, size, from: 0);
+        return queryable.ToPaginate(index, size, from: 0);
     }
 
     public IPaginate<TEntity> GetListByDynamic(
@@ -400,7 +408,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
             queryable = queryable.IgnoreQueryFilters();
         if (predicate != null)
             queryable = queryable.Where(predicate);
-        return queryable.ToPaginate(index, size);
+        return queryable.ToPaginate(index, size, from: 0);
     }
 
     public bool Any(
@@ -459,7 +467,18 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
                 ?.MakeGenericMethod(navigationPropertyType)
             ?? throw new InvalidOperationException("CreateQuery<TElement> method is not found in IQueryProvider.");
         var queryProviderQuery = (IQueryable<object>)createQueryMethod.Invoke(query.Provider, parameters: [query.Expression])!;
-        return queryProviderQuery.Where(x => !((IEntityTimestamps)x).DeletedDate.HasValue);
+        queryProviderQuery = queryProviderQuery.Where(x => !((IEntityTimestamps)x).DeletedDate.HasValue);
+
+        // EF Core global query filter is not guaranteed to apply when cascading soft-deletes via
+        // a manually built IQueryable on a relation. Explicitly enforce tenant ownership here so
+        // a cascade can never touch another tenant's row (defense-in-depth with the global filter).
+        if (typeof(ITenantEntity).IsAssignableFrom(navigationPropertyType)
+            && TenantSetter is { IsSuperAdmin: false, CurrentTenantId: { } tenantId })
+        {
+            queryProviderQuery = queryProviderQuery.Where(x => ((ITenantEntity)x).TenantId == tenantId);
+        }
+
+        return queryProviderQuery;
     }
 
     protected void CheckHasEntityHaveOneToOneRelation(TEntity entity)
@@ -541,13 +560,13 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
                     {
                         IQueryable<object>? relationLoaderQuery = GetRelationLoaderQuery(
                             query,
-                            navigationPropertyType: navigation.PropertyInfo.GetType()
+                            navigationPropertyType: navigation.TargetEntityType.ClrType
                         );
                         if (relationLoaderQuery is not null)
                             navValue = await relationLoaderQuery.ToListAsync(cancellationToken);
                     }
                     else
-                        navValue = GetRelationLoaderQuery(query, navigationPropertyType: navigation.PropertyInfo.GetType())
+                        navValue = GetRelationLoaderQuery(query, navigationPropertyType: navigation.TargetEntityType.ClrType)
                             ?.ToList();
 
                     if (navValue == null)
@@ -567,13 +586,13 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
                     {
                         IQueryable<object>? relationLoaderQuery = GetRelationLoaderQuery(
                             query,
-                            navigationPropertyType: navigation.PropertyInfo.GetType()
+                            navigationPropertyType: navigation.TargetEntityType.ClrType
                         );
                         if (relationLoaderQuery is not null)
                             navValue = await relationLoaderQuery.FirstOrDefaultAsync(cancellationToken);
                     }
                     else
-                        navValue = GetRelationLoaderQuery(query, navigationPropertyType: navigation.PropertyInfo.GetType())
+                        navValue = GetRelationLoaderQuery(query, navigationPropertyType: navigation.TargetEntityType.ClrType)
                             ?.FirstOrDefault();
 
                     if (navValue == null)

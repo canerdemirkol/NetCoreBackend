@@ -26,6 +26,6 @@ public class TenantValidationBehavior<TRequest, TResponse> : IPipelineBehavior<T
                 throw new AuthorizationException("Tenant context is required for this operation.");
         }
 
-        return await next();
+        return await next(cancellationToken);
     }
 }
