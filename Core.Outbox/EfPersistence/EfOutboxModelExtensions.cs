@@ -22,6 +22,13 @@ public static class EfOutboxModelExtensions
             // Filtered index narrows to the pending set without scanning processed history.
             b.HasIndex(m => new { m.IsPoisoned, m.ProcessedAtUtc, m.NextAttemptUtc, m.OccurredAtUtc })
                 .HasDatabaseName("IX_OutboxMessages_DispatchQueue");
+
+            // Archival/cleanup hot path: DELETE … WHERE ProcessedAtUtc < @cutoff.
+            // Without this index that query is a full table scan because the dispatch-queue
+            // index above is ordered IsPoisoned-first and does not help a ProcessedAtUtc range
+            // predicate on processed rows.
+            b.HasIndex(m => m.ProcessedAtUtc)
+                .HasDatabaseName("IX_OutboxMessages_ProcessedAtUtc");
         });
         return modelBuilder;
     }

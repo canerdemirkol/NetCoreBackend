@@ -54,7 +54,23 @@ public static class AesGcmEncryptionHelper
 
         byte[] plaintext = new byte[ciphertext.Length];
         using AesGcm aes = new(key, TagSize);
-        aes.Decrypt(nonce, ciphertext, tag, plaintext, associatedData);
+        try
+        {
+            aes.Decrypt(nonce, ciphertext, tag, plaintext, associatedData);
+        }
+        catch (AuthenticationTagMismatchException ex)
+        {
+            // Default tag-mismatch message contains zero context. In production the three
+            // realistic causes are: (a) wrong key (often during key rotation), (b) wrong
+            // associatedData binding (e.g. blob loaded with different user/tenant scope),
+            // (c) blob tampered or truncated at rest. Surface enough metadata to triage
+            // without leaking secret material.
+            throw new CryptographicException(
+                $"AES-GCM decryption failed: authentication tag mismatch. " +
+                $"Likely causes: wrong key (rotation in progress?), mismatched associatedData, or tampered ciphertext. " +
+                $"Blob length: {blob.Length} bytes, associatedData present: {(associatedData is not null ? "yes" : "no")}.",
+                ex);
+        }
         return plaintext;
     }
 

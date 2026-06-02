@@ -29,7 +29,7 @@ public sealed class AesGcmEncryptionHelperTests
         // Flip a bit in the ciphertext section (after nonce + tag).
         encrypted[encrypted.Length - 1] ^= 0x01;
 
-        Assert.Throws<AuthenticationTagMismatchException>(
+        Assert.Throws<CryptographicException>(
             () => AesGcmEncryptionHelper.Decrypt(encrypted, key));
     }
 
@@ -40,7 +40,7 @@ public sealed class AesGcmEncryptionHelperTests
         byte[] keyB = AesGcmEncryptionHelper.GenerateKey();
         byte[] encrypted = AesGcmEncryptionHelper.Encrypt(Encoding.UTF8.GetBytes("x"), keyA);
 
-        Assert.Throws<AuthenticationTagMismatchException>(
+        Assert.Throws<CryptographicException>(
             () => AesGcmEncryptionHelper.Decrypt(encrypted, keyB));
     }
 
@@ -63,7 +63,7 @@ public sealed class AesGcmEncryptionHelperTests
         byte[] adB = Encoding.UTF8.GetBytes("user:2");
 
         byte[] encrypted = AesGcmEncryptionHelper.Encrypt(plain, key, adA);
-        Assert.Throws<AuthenticationTagMismatchException>(
+        Assert.Throws<CryptographicException>(
             () => AesGcmEncryptionHelper.Decrypt(encrypted, key, adB));
     }
 }

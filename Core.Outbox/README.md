@@ -206,7 +206,14 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<AppDbContext>(opt =>
     opt.UseSqlServer(builder.Configuration.GetConnectionString("AppDb")));
 
-// 2. Outbox store + worker
+// 2. Multi-tenancy — multi-tenant SaaS senaryosunda ZORUNLU. AddOutbox'tan önce gelmeli;
+// EfOutboxStore.AppendAsync TenantId stamp'i için ITenantEntitySetter resolve eder.
+// Setter yoksa + msg.TenantId boşsa append loud error fırlatır (orphan row yok).
+builder.Services.AddMultiTenancy();
+
+// 3. Outbox store + worker.
+// OutboxOptions startup'ta ValidateOnStart() ile Validate() çağırır —
+// BatchSize=0 / MaxRetryDelay<BaseRetryDelay gibi misconfiguration host build'te fail eder.
 builder.Services.AddOutbox<AppDbContext>(opt =>
 {
     opt.BatchSize      = 100;
@@ -216,7 +223,7 @@ builder.Services.AddOutbox<AppDbContext>(opt =>
     opt.MaxRetryDelay  = TimeSpan.FromMinutes(10);
 });
 
-// 3. RabbitMQ connection — Singleton (connection pahalı, channel ucuz)
+// 4. RabbitMQ connection — Singleton (connection pahalı, channel ucuz)
 builder.Services.AddSingleton<IConnection>(sp =>
 {
     var factory = new ConnectionFactory
@@ -228,7 +235,7 @@ builder.Services.AddSingleton<IConnection>(sp =>
     return factory.CreateConnectionAsync().GetAwaiter().GetResult();
 });
 
-// 4. Senin publisher — Scoped (worker her batch için yeni scope açar)
+// 5. Senin publisher — Scoped (worker her batch için yeni scope açar)
 builder.Services.AddScoped<IOutboxPublisher, RabbitMqOutboxPublisher>();
 
 var app = builder.Build();
@@ -360,6 +367,69 @@ Her batch için **yeni DI scope** açılır — DbContext per-batch tracker stat
 
 ---
 
+## 7.1 Horizontal scaling — bilinen sınırlama
+
+`OutboxPublisherWorker` **tek replica** çalışacak şekilde tasarlandı. Birden çok replica aynı anda `FetchDueAsync` çağırırsa **aynı row'u iki kez** publish edebilir (pessimistic lock / `FOR UPDATE SKIP LOCKED` framework'te yok — provider-specific).
+
+### Pratik çözümler
+
+| Yaklaşım | Açıklama |
+|---|---|
+| **Tek replica** (önerilen) | K8s `Deployment.replicas: 1` veya bir tek BackgroundService host'u. Worker zaten cheap (polling-based), throughput için **`BatchSize` artırmak** çoğu zaman replicas çoğaltmaktan iyi sonuç verir. |
+| **Leader election** | Birden çok host varsa, sadece "leader" worker'ın çalışmasına izin ver (ZooKeeper / Consul / Redis lock). Worker'a `IHostedService` koşulu ekleyip lock alamayan instance hemen exit eder. |
+| **Custom store + FOR UPDATE SKIP LOCKED** | `IOutboxStore`'u kendi raw-SQL implementasyonunla değiştir; Postgres/MySQL/SQL Server için `SELECT … FOR UPDATE SKIP LOCKED` ile multiple worker safe consume sağlar. |
+| **Idempotent consumer** | Publisher'ın throw atmadığı ama mesajın çift teslim edildiği senaryoda consumer tarafında idempotency key kontrolü zaten varsa, duplicate publish veri açısından zararsız olur. |
+
+> Default kurulum (tek replica) çoğu SaaS için yeterli — outbox iş yükü typically saniyede yüzlerce mesaj seviyesindedir, batch=100 ile rahatlıkla karşılanır.
+
+---
+
+## 7.2 Multi-tenant semantik
+
+Outbox `TenantEntity` — her satır `TenantId`'ye bağlı, ama iki path **farklı** davranır:
+
+### Write path (handler → AppendAsync)
+
+`AppendAsync` `TenantId == Guid.Empty` ise mevcut `ITenantEntitySetter`'dan stamp eder. Tipik akış:
+
+```
+Request → TenantMiddleware → TenantContext.SetTenant(tenantA)
+   → PlaceOrderHandler → _outbox.AppendAsync(msg)   // msg.TenantId boş
+   → EfOutboxStore stamp eder: msg.TenantId = tenantA
+   → SaveChangesAsync atomic commit
+```
+
+Tenant context yoksa + `ITenantEntitySetter` register edilmemişse **loud error** — orphan row asla yazılmaz.
+
+### Read path (worker → FetchDueAsync)
+
+`OutboxPublisherWorker` `BackgroundService`'tir. HttpContext yok, TenantMiddleware çalışmamış, tenant context boş. **Worker by-design cross-tenant** — tüm tenant'ların outbox'ını drain etmeli, yoksa hiç event ship'lenmez.
+
+Bu yüzden `FetchDueAsync` `IgnoreQueryFilters()` çağırır. Consumer'ın `DbContext`'inde `OutboxMessage` üzerinde tenant query filter olsa bile worker tüm satırları görür.
+
+> **Per-tenant routing istiyorsan** `IOutboxPublisher.PublishAsync` içinde `message.TenantId`'yi okuyup tenant-specific topic/queue'ya yönlendirebilirsin — TenantId payload'a yazılmasa bile entity'de mevcut.
+
+### Özet kontrat
+
+| Path | Tenant context lazım mı? | Filter davranışı |
+|---|---|---|
+| `AppendAsync` | Evet — TenantSetter'dan stamp ya da `msg.TenantId` explicit set | — |
+| `FetchDueAsync` | Hayır — worker tüm tenant'ları görür | `IgnoreQueryFilters()` |
+| `MarkProcessedAsync` / `RecordFailureAsync` | Hayır — entity zaten tracker'da, sadece SaveChanges | — |
+
+---
+
+## 7.3 DbContext isolation — bilinen sınırlama
+
+`EfOutboxStore.MarkProcessedAsync` ve `RecordFailureAsync` `SaveChangesAsync` çağırır — bu **DbContext'teki TÜM tracked değişiklikleri** commit eder, sadece outbox row'unu değil.
+
+- **Worker yolu güvenli**: `OutboxPublisherWorker` her batch için fresh DI scope açar → DbContext sadece outbox row'larını tracker'da tutar. ✅
+- **Consumer dikkat etmeli**: `IOutboxStore`'u request-scoped DbContext üzerinden başka bir handler'dan kullanıyorsan, `SaveChangesAsync` request'te tracked olan diğer entity'leri de commit edebilir.
+
+**Pratik öneri:** `IOutboxStore`'u sadece `AppendAsync` için kullan; `MarkProcessed/RecordFailure`'ı worker'a bırak. `AppendAsync` zaten `SaveChangesAsync` çağırmıyor — sadece DbContext'e Add ediyor, atomicity'i caller'ın transaction'ı sağlıyor.
+
+---
+
 ## 8. Sana ne zaman lazım?
 
 | Senaryo | Outbox lazım mı? |
@@ -376,7 +446,7 @@ Her batch için **yeni DI scope** açılır — DbContext per-batch tracker stat
 
 ## 9. Konfigürasyon
 
-Tam appsettings + connection string örneği için bkz. **[SETUP.md → Outbox & RabbitMQ Configuration](../SETUP.md#outbox--rabbitmq-configuration)**.
+Tam appsettings + connection string örneği için bkz. **[SETUP.md → Outbox & RabbitMQ Configuration](../SETUP.md#12-outbox--rabbitmq-configuration)**.
 
 ---
 

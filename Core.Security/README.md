@@ -169,7 +169,7 @@ Sms    → SMS (genişletilebilir)
 
 Hash'lenemeyen ama saklanması/geri okunması gereken sensitive payload'lar için. Tipik kullanım: TOTP secret key, OAuth refresh token'ları, 3rd-party API key'leri, recovery code'lar.
 
-**Algoritma:** AES-256-GCM (authenticated encryption). Blob layout: `[12-byte nonce][16-byte tag][ciphertext]`. Byte oynatılmış blob `AuthenticationTagMismatchException` ile reddedilir.
+**Algoritma:** AES-256-GCM (authenticated encryption). Blob layout: `[12-byte nonce][16-byte tag][ciphertext]`. Byte oynatılmış / yanlış key ile decrypt edilen blob `CryptographicException` ile reddedilir — exception mesajı blob length + associatedData presence info'su içerir (key rotation debug'ı kolaylaşır).
 
 ### Kurulum
 
@@ -181,7 +181,7 @@ byte[] masterKey = Convert.FromBase64String(
 builder.Services.AddSingleton(new EncryptionMasterKey(masterKey));
 ```
 
-`EncryptionMasterKey(byte[])` ctor 32-byte uzunluk doğrulamasını yapar; daha kısa key `ArgumentException` ile reddedilir.
+`EncryptionMasterKey(byte[])` ctor 32-byte uzunluk doğrulamasını yapar; daha kısa key `ArgumentException` ile reddedilir. Ctor defensive copy alır, `Value` getter da her okumada copy döndürür → caller'ın master key buffer'ını mutasyonla bozması mümkün değil. Allocation-free hot path için `key.AsSpan()` kullan.
 
 ### TOTP secret encryption örneği
 

@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using NetCoreBackend.NArchitecture.Core.Persistence.DbMigrationApplier;
 
 namespace NetCoreBackend.NArchitecture.Core.Persistence.DependencyInjection;
@@ -15,9 +16,13 @@ public static class ServiceCollectionDbMigrationApplierExtensions
         where TDbContext : DbContext
     {
         services.AddTransient<IDbMigrationApplierService>(sp =>
-            new DbMigrationApplierManager<TDbContext>(sp.GetRequiredService<TDbContext>()));
+            new DbMigrationApplierManager<TDbContext>(
+                sp.GetRequiredService<TDbContext>(),
+                sp.GetRequiredService<ILogger<DbMigrationApplierManager<TDbContext>>>()));
         services.AddTransient<IDbMigrationApplierService<TDbContext>>(sp =>
-            new DbMigrationApplierManager<TDbContext>(sp.GetRequiredService<TDbContext>()));
+            new DbMigrationApplierManager<TDbContext>(
+                sp.GetRequiredService<TDbContext>(),
+                sp.GetRequiredService<ILogger<DbMigrationApplierManager<TDbContext>>>()));
 
         return services;
     }

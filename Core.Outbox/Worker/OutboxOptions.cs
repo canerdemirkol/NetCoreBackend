@@ -21,4 +21,22 @@ public sealed class OutboxOptions
     // Cap on the computed retry delay so exponential growth doesn't push retries into
     // tomorrow when AttemptCount is high.
     public TimeSpan MaxRetryDelay { get; set; } = TimeSpan.FromMinutes(10);
+
+    // Fail fast at startup. Silently coercing nonsense (BatchSize=0 → infinite idle loop,
+    // MaxRetryDelay < BaseRetryDelay → first-attempt cap) costs hours to debug; loud
+    // exceptions surface the misconfiguration during deployment instead of production.
+    public void Validate()
+    {
+        if (BatchSize <= 0)
+            throw new InvalidOperationException($"OutboxOptions.BatchSize must be > 0 (was {BatchSize}).");
+        if (MaxAttempts <= 0)
+            throw new InvalidOperationException($"OutboxOptions.MaxAttempts must be > 0 (was {MaxAttempts}).");
+        if (IdlePollDelay <= TimeSpan.Zero)
+            throw new InvalidOperationException($"OutboxOptions.IdlePollDelay must be positive (was {IdlePollDelay}).");
+        if (BaseRetryDelay <= TimeSpan.Zero)
+            throw new InvalidOperationException($"OutboxOptions.BaseRetryDelay must be positive (was {BaseRetryDelay}).");
+        if (MaxRetryDelay < BaseRetryDelay)
+            throw new InvalidOperationException(
+                $"OutboxOptions.MaxRetryDelay ({MaxRetryDelay}) must be >= BaseRetryDelay ({BaseRetryDelay}).");
+    }
 }

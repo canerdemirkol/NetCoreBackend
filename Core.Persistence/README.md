@@ -115,6 +115,25 @@ public async Task<int> ArchiveOldOrdersAsync(DateTime before)
 
 `CurrentTenantId` → `EfRepositoryBase`'de `protected Guid? CurrentTenantId => TenantSetter?.CurrentTenantId;` olarak tanımlıdır.
 
+### `ExecuteUpdateAsync` / `ExecuteDeleteAsync` — Bulk operations, tenant-safe ✅
+
+EF Core 7+ bulk update/delete API'sinin (`UpdateSettersBuilder<T>`) tenant-aware wrapper'ı. Predicate `Query()` üzerinden zincirlendiği için EF Core'un global query filter'ı otomatik uygulanır; ek olarak `GuardTenantContext()` raw-SQL path'leriyle aynı tenant context kontrolünü yapar.
+
+```csharp
+// Bulk update — sadece current tenant'ın kayıtları etkilenir
+await _orderRepo.ExecuteUpdateAsync(
+    predicate: o => o.Status == OrderStatus.Pending && o.CreatedDate < cutoff,
+    setPropertyCalls: setters => setters.SetProperty(o => o.Status, OrderStatus.Expired),
+    cancellationToken: ct);
+
+// Bulk delete — soft-delete istiyorsan ExecuteUpdate ile DeletedDate yaz
+await _orderRepo.ExecuteDeleteAsync(
+    predicate: o => o.Status == OrderStatus.Archived && o.UpdatedDate < cutoff,
+    cancellationToken: ct);
+```
+
+`Update`/`Delete`'in tek-row paterninden farkı: payload pre-load gerekmez, tek SQL statement gönderilir, bellek efficient. Kullanırken predicate'in TENANT scope'unda olduğundan emin ol — yanlış bir predicate bütün tenant'ın verisini etkileyebilir.
+
 ## Dinamik Query
 
 ```json

@@ -533,12 +533,19 @@ using RabbitMQ.Client;
 builder.Services.AddDbContext<AppDbContext>(opt =>
     opt.UseSqlServer(builder.Configuration.GetConnectionString("AppDb")));
 
-// 2. Outbox
+// 2. Multi-tenancy — outbox multi-tenant SaaS'sa ZORUNLU. AddOutbox'tan önce gelmeli;
+// EfOutboxStore.AppendAsync TenantId stamp'i için ITenantEntitySetter resolve eder.
+// (Tek-tenant uygulamalar bunu atlayabilir; o zaman handler'lar msg.TenantId'yi explicit set eder.)
+builder.Services.AddMultiTenancy();
+
+// 3. Outbox — Configure ile appsettings'ten options bind, sonra AddOutbox store + worker.
+// AddOutbox içinde ValidateOnStart() ile OutboxOptions.Validate() çağrılır;
+// BatchSize=0, MaxRetryDelay<BaseRetryDelay gibi misconfiguration host build'te fail eder.
 builder.Services.Configure<OutboxOptions>(
-    builder.Configuration.GetSection("OutboxOptions"));   // appsettings'ten options bind
+    builder.Configuration.GetSection("OutboxOptions"));
 builder.Services.AddOutbox<AppDbContext>();               // store + worker
 
-// 3. RabbitMQ connection — Singleton (connection pahalı, channel ucuz)
+// 4. RabbitMQ connection — Singleton (connection pahalı, channel ucuz)
 builder.Services.AddSingleton<IConnection>(sp =>
 {
     var factory = new ConnectionFactory
@@ -551,10 +558,10 @@ builder.Services.AddSingleton<IConnection>(sp =>
     return factory.CreateConnectionAsync().GetAwaiter().GetResult();
 });
 
-// 4. Senin IOutboxPublisher implementasyonun
+// 5. Senin IOutboxPublisher implementasyonun
 builder.Services.AddScoped<IOutboxPublisher, RabbitMqOutboxPublisher>();
 
-// 5. AES-GCM master key — startup'ta tek yükle, Singleton'la enjekte et.
+// 6. AES-GCM master key — startup'ta tek yükle, Singleton'la enjekte et.
 // EncryptionMasterKey wrapper'ı 32-byte uzunluk doğrulamasını ctor'da yapar; ayrıca DI
 // grafında bare `byte[]` Singleton'ların birbirine karışmasını engeller.
 byte[] masterKey = Convert.FromBase64String(

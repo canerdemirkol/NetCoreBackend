@@ -20,9 +20,15 @@ public static class OutboxServiceRegistration
         this IServiceCollection services,
         Action<OutboxOptions>? configure = null) where TDbContext : DbContext
     {
-        services.AddOptions<OutboxOptions>();
+        // Bind + validate at startup so misconfigured options (BatchSize=0,
+        // MaxRetryDelay < BaseRetryDelay, etc.) surface during host build instead of
+        // silently degrading worker behavior at runtime.
+        var optionsBuilder = services.AddOptions<OutboxOptions>();
         if (configure is not null)
-            services.Configure(configure);
+            optionsBuilder.Configure(configure);
+        optionsBuilder
+            .Validate(opt => { opt.Validate(); return true; }, "OutboxOptions validation failed")
+            .ValidateOnStart();
 
         services.TryAddScoped<IOutboxStore, EfOutboxStore<TDbContext>>();
         services.AddHostedService<OutboxPublisherWorker>();

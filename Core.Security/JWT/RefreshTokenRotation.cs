@@ -57,6 +57,13 @@ public static class RefreshTokenRotation
             token.RevokedByIp = revokedByIp;
             token.ReasonRevoked = ReasonReuseDetected;
         }
+
+        // Presented token enters this branch as already-revoked (rotation marked it earlier)
+        // and the family loop skips it. Overwrite its revocation metadata so the audit trail
+        // tells the truth: the row that triggered the family wipe is itself marked with the
+        // ReuseDetected reason, not its original "Rotated" reason.
+        presented.ReasonRevoked = ReasonReuseDetected;
+        presented.RevokedByIp = revokedByIp;
         return true;
     }
 }
