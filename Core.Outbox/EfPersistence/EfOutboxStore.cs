@@ -5,30 +5,45 @@ using NetCoreBackend.NArchitecture.Core.Persistence.Repositories;
 
 namespace NetCoreBackend.NArchitecture.Core.Outbox.EfPersistence;
 
-// EF Core-backed outbox store. Generic over the consumer's DbContext so the consumer keeps
-// ownership of the connection / migration story; this library only needs a DbSet<OutboxMessage>.
-//
-// Important contract: the consumer's DbContext MUST expose `DbSet<OutboxMessage> OutboxMessages`
-// or configure the entity manually. See EfOutboxModelExtensions for the recommended
-// OnModelCreating call.
-//
-// Isolation contract: the methods that call SaveChangesAsync (MarkProcessed / RecordFailure)
-// will flush EVERY tracked change on the DbContext, not just the outbox row. The shipped
-// OutboxPublisherWorker opens a fresh DI scope per batch so this is safe by construction.
-// Consumers using EfOutboxStore from a request-scoped DbContext must be aware they are
-// flushing on the worker's behalf and avoid leaving stray tracked entities that should not
-// commit yet — typically by using a dedicated DbContext scope around the outbox call.
+/// <summary>
+/// EF Core-backed <see cref="IOutboxStore"/> generic over the consumer's <c>DbContext</c>.
+/// The library only needs a <c>DbSet&lt;OutboxMessage&gt;</c>; the consumer keeps ownership
+/// of connection setup, migrations and the schema.
+/// </summary>
+/// <typeparam name="TDbContext">Concrete <c>DbContext</c> that holds the outbox table.</typeparam>
+/// <remarks>
+/// <para>
+/// <strong>Schema contract:</strong> the consumer's <c>OnModelCreating</c> MUST call
+/// <see cref="EfOutboxModelExtensions.ConfigureOutbox"/> (or define <c>OutboxMessage</c>
+/// manually with equivalent indexes).
+/// </para>
+/// <para>
+/// <strong>Tenant contract:</strong> when <c>ITenantEntitySetter</c> is registered,
+/// <see cref="AppendAsync"/> calls <c>SetTenantId</c> unconditionally — for a regular
+/// tenant user the active tenant overrides any caller-provided <c>TenantId</c>, blocking
+/// cross-tenant write attempts; for SuperAdmin without impersonation the caller MUST
+/// pre-set <c>TenantId</c>. When no setter is registered AND <c>TenantId</c> is empty,
+/// <see cref="AppendAsync"/> throws to prevent <c>Guid.Empty</c> rows that would be
+/// invisible to every tenant filter.
+/// </para>
+/// <para>
+/// <strong>Isolation contract:</strong> <see cref="MarkProcessedAsync"/> and
+/// <see cref="RecordFailureAsync"/> call <c>SaveChangesAsync</c>, which flushes EVERY
+/// tracked change on the <c>DbContext</c>. The shipped <c>OutboxPublisherWorker</c> opens
+/// a fresh DI scope per batch so this is safe by construction. Consumers reusing the store
+/// from a request-scoped <c>DbContext</c> must avoid leaving stray tracked entities that
+/// should not commit yet.
+/// </para>
+/// </remarks>
 public sealed class EfOutboxStore<TDbContext> : IOutboxStore where TDbContext : DbContext
 {
     private readonly TDbContext _context;
     private readonly ITenantEntitySetter? _tenantSetter;
 
-    // tenantSetter is optional: a non-multi-tenant app can use the outbox without taking
-    // Core.MultiTenancy as a dependency. When ITenantEntitySetter IS registered, AppendAsync
-    // stamps the row's TenantId from the current context (mirroring EfRepositoryBase's
-    // EditEntityPropertiesToAdd behavior). When it's missing AND the message has a default
-    // TenantId, AppendAsync fails fast so the row never lands with Guid.Empty — which would
-    // otherwise be invisible to every tenant filter.
+    /// <summary>
+    /// Construct the store. <paramref name="tenantSetter"/> is optional: non-multi-tenant
+    /// apps can use the outbox without taking <c>Core.MultiTenancy</c> as a dependency.
+    /// </summary>
     public EfOutboxStore(TDbContext context, ITenantEntitySetter? tenantSetter = null)
     {
         _context = context;

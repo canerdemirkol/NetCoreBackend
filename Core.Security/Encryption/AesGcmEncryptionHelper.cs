@@ -2,26 +2,51 @@ using System.Security.Cryptography;
 
 namespace NetCoreBackend.NArchitecture.Core.Security.Encryption;
 
-// Symmetric at-rest encryption helper for short, security-sensitive payloads such as TOTP
-// secret keys, recovery codes, or third-party API tokens that the framework must store but
-// not expose at row read.
-//
-// Algorithm: AES-GCM (authenticated encryption). Output layout is a single byte[]:
-//   [12-byte nonce][16-byte auth tag][ciphertext]
-// Verification fails (CryptographicException) if anyone tampers with any byte of the blob.
-//
-// Key management:
-//   - Caller supplies a 32-byte master key (AES-256). The key SHOULD come from a secret
-//     manager (Azure Key Vault, AWS Secrets Manager, sealed cluster secret) — not config.
-//   - Re-keying: keep the old key, decrypt-then-encrypt with the new key during a one-time
-//     migration. Versioning is NOT baked into the blob — if you anticipate key rotation,
-//     prefix the blob with your own version byte and switch keys based on that.
+/// <summary>
+/// Symmetric at-rest encryption helper for short, security-sensitive payloads such as TOTP
+/// secret keys, recovery codes or third-party API tokens that the framework must store
+/// but not expose at row read.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <strong>Algorithm:</strong> AES-256-GCM (authenticated encryption). Output layout is a
+/// single byte array: <c>[12-byte nonce][16-byte auth tag][ciphertext]</c>. Verification
+/// fails with <see cref="CryptographicException"/> if any byte of the blob has been
+/// tampered with, the key is wrong, or the associated data does not match.
+/// </para>
+/// <para>
+/// <strong>Key management:</strong> caller supplies a 32-byte master key (AES-256). The key
+/// SHOULD come from a secret manager (Azure Key Vault, AWS Secrets Manager, sealed
+/// cluster secret) — not <c>appsettings.json</c>. Wrap the key in
+/// <see cref="EncryptionMasterKey"/> when registering with DI to avoid <c>byte[]</c>
+/// resolution conflicts.
+/// </para>
+/// <para>
+/// <strong>Re-keying:</strong> keep the old key, decrypt-then-encrypt with the new key
+/// during a one-time migration. Versioning is NOT baked into the blob — if you anticipate
+/// key rotation, prefix the blob with your own version byte and switch keys based on that.
+/// </para>
+/// </remarks>
 public static class AesGcmEncryptionHelper
 {
-    public const int KeySize = 32;        // AES-256
-    public const int NonceSize = 12;      // GCM standard
-    public const int TagSize = 16;        // GCM standard
+    /// <summary>AES-256 key size in bytes.</summary>
+    public const int KeySize = 32;
+    /// <summary>GCM nonce size in bytes (RFC 5116 recommended).</summary>
+    public const int NonceSize = 12;
+    /// <summary>GCM authentication tag size in bytes (NIST SP 800-38D maximum).</summary>
+    public const int TagSize = 16;
 
+    /// <summary>
+    /// Encrypt <paramref name="plaintext"/> with <paramref name="key"/> and an optional
+    /// <paramref name="associatedData"/> binding. A fresh random nonce is generated on
+    /// every call; never reuse one externally.
+    /// </summary>
+    /// <param name="plaintext">Bytes to encrypt. May be empty.</param>
+    /// <param name="key">32-byte AES-256 key.</param>
+    /// <param name="associatedData">Optional context bytes bound into the tag computation
+    /// (e.g. <c>UTF8("otp:{userId}")</c>). The same value MUST be supplied to
+    /// <see cref="Decrypt"/> or verification fails.</param>
+    /// <returns>Self-contained blob: <c>[nonce | tag | ciphertext]</c>.</returns>
     public static byte[] Encrypt(byte[] plaintext, byte[] key, byte[]? associatedData = null)
     {
         ArgumentNullException.ThrowIfNull(plaintext);
@@ -41,6 +66,18 @@ public static class AesGcmEncryptionHelper
         return output;
     }
 
+    /// <summary>
+    /// Decrypt a blob produced by <see cref="Encrypt"/>. Tag verification is performed
+    /// before the plaintext is returned — any tampering throws.
+    /// </summary>
+    /// <param name="blob">Self-contained blob: <c>[nonce | tag | ciphertext]</c>.</param>
+    /// <param name="key">32-byte AES-256 key — must match the one used to encrypt.</param>
+    /// <param name="associatedData">Must match the value supplied to <see cref="Encrypt"/>
+    /// exactly; otherwise the tag mismatches and decryption fails.</param>
+    /// <returns>The original plaintext bytes.</returns>
+    /// <exception cref="CryptographicException">Tag mismatch — wrong key, mismatched
+    /// associated data, or tampered ciphertext. The exception message includes blob length
+    /// and associated-data presence to ease key-rotation debugging.</exception>
     public static byte[] Decrypt(byte[] blob, byte[] key, byte[]? associatedData = null)
     {
         ArgumentNullException.ThrowIfNull(blob);
@@ -74,6 +111,11 @@ public static class AesGcmEncryptionHelper
         return plaintext;
     }
 
+    /// <summary>
+    /// Convenience: produce a cryptographically random 32-byte AES-256 key. Intended for
+    /// one-off generation during deployment setup — the result should be stored in a secret
+    /// manager and reused, not regenerated per run.
+    /// </summary>
     public static byte[] GenerateKey() => RandomNumberGenerator.GetBytes(KeySize);
 
     private static void GuardKey(byte[] key)

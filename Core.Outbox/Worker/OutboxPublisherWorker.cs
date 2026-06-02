@@ -7,16 +7,31 @@ using NetCoreBackend.NArchitecture.Core.Outbox.Entities;
 
 namespace NetCoreBackend.NArchitecture.Core.Outbox.Worker;
 
-// BackgroundService that drains the outbox in a loop:
-//   1. Open a DI scope (each iteration gets its own IOutboxStore + IOutboxPublisher).
-//   2. Fetch up to OutboxOptions.BatchSize due rows.
-//   3. Hand each to the publisher; on success mark processed, on failure schedule retry
-//      (or poison after MaxAttempts).
-//   4. If the batch was empty, sleep IdlePollDelay; otherwise loop immediately to drain.
-//
-// Failure isolation: a single row throw never bubbles out of the loop. The worker survives
-// transient publisher outages, marks individual messages with their own error text, and
-// keeps shipping the others.
+/// <summary>
+/// <c>BackgroundService</c> that drains the outbox in a loop:
+/// open a DI scope per iteration → fetch up to <c>OutboxOptions.BatchSize</c> due rows →
+/// hand each to <c>IOutboxPublisher</c> → mark processed on success / record failure with
+/// exponential backoff (or poison after <c>MaxAttempts</c>) on exception →
+/// sleep <c>IdlePollDelay</c> if the batch was empty, otherwise loop immediately to drain.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <strong>Failure isolation:</strong> a single row throw never bubbles out of the loop.
+/// The worker survives transient publisher outages, records each row's error individually,
+/// and keeps shipping the rest of the batch.
+/// </para>
+/// <para>
+/// <strong>Cancellation:</strong> <c>OperationCanceledException</c> tied to the host
+/// stopping token exits the loop gracefully; per-message cancellation re-throws so the
+/// message is NOT penalised — it is re-fetched on the next run.
+/// </para>
+/// <para>
+/// <strong>Horizontal scaling:</strong> by default this worker assumes a single replica.
+/// Running multiple instances against the same outbox table without external coordination
+/// (e.g. leader election, <c>FOR UPDATE SKIP LOCKED</c>) risks duplicate publishes —
+/// see <c>Core.Outbox/README.md §7.1</c>.
+/// </para>
+/// </remarks>
 public sealed class OutboxPublisherWorker : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;

@@ -3,10 +3,22 @@ using NetCoreBackend.NArchitecture.Core.Outbox.Entities;
 
 namespace NetCoreBackend.NArchitecture.Core.Outbox.EfPersistence;
 
-// Convenience: call from the consumer's DbContext.OnModelCreating so the worker's expected
-// schema (indexed by NextAttemptUtc + ProcessedAtUtc for hot-path polling) is in place.
+/// <summary>
+/// Convenience extension to configure the <see cref="OutboxMessage"/> entity (table name,
+/// key, length constraints and the two hot-path indexes the worker / archival queries rely
+/// on). Call from the consumer's <c>DbContext.OnModelCreating</c>.
+/// </summary>
 public static class EfOutboxModelExtensions
 {
+    /// <summary>
+    /// Register <see cref="OutboxMessage"/> on the model with the framework's expected
+    /// schema: required <c>EventType</c>/<c>Payload</c>, bounded <c>CorrelationId</c>,
+    /// dispatch-queue index (<c>IsPoisoned</c>, <c>ProcessedAtUtc</c>, <c>NextAttemptUtc</c>,
+    /// <c>OccurredAtUtc</c>) for worker polling, and archival index on
+    /// <c>ProcessedAtUtc</c> for cleanup queries.
+    /// </summary>
+    /// <param name="modelBuilder">The model builder, returned for chaining.</param>
+    /// <param name="tableName">Override the table name (default: <c>"OutboxMessages"</c>).</param>
     public static ModelBuilder ConfigureOutbox(this ModelBuilder modelBuilder, string? tableName = "OutboxMessages")
     {
         modelBuilder.Entity<OutboxMessage>(b =>

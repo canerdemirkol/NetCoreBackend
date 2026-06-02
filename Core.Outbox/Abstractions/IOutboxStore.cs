@@ -2,24 +2,46 @@ using NetCoreBackend.NArchitecture.Core.Outbox.Entities;
 
 namespace NetCoreBackend.NArchitecture.Core.Outbox.Abstractions;
 
-// Storage abstraction for the outbox. The default EfOutboxStore (in this library) uses a
-// DbContext-resolved DbSet<OutboxMessage>; a consumer can replace it with a non-EF backing
-// store if they choose.
+/// <summary>
+/// Storage abstraction for the outbox. The default <c>EfOutboxStore&lt;TDbContext&gt;</c>
+/// shipped with the framework uses the consumer's <c>DbContext</c>; replace this
+/// registration to back the outbox with a non-EF store (Cosmos, Redis Streams, …).
+/// </summary>
 public interface IOutboxStore
 {
-    // Atomically append a message in the same SaveChanges() as the business write — caller
-    // is responsible for invoking SaveChanges (typically via TransactionScopeBehavior).
+    /// <summary>
+    /// Append a message to the outbox. The store DOES NOT commit — caller flushes via the
+    /// surrounding <c>SaveChangesAsync</c> so the row is atomic with the business write.
+    /// </summary>
+    /// <remarks>
+    /// Tenant stamp: when <c>message.TenantId</c> is empty, <c>EfOutboxStore</c> consults
+    /// the registered <c>ITenantEntitySetter</c> and stamps from the current context (or
+    /// throws if no context is available). When <c>TenantId</c> is already populated for a
+    /// regular tenant user, <c>SetTenantId</c> overrides it with the active tenant to
+    /// block cross-tenant write attempts.
+    /// </remarks>
     Task AppendAsync(OutboxMessage message, CancellationToken cancellationToken);
 
-    // Pull up to `batchSize` rows that are due for dispatch (not processed, not poisoned,
-    // NextAttemptUtc is null or in the past). Ordered by OccurredAtUtc ascending so older
-    // events ship first.
+    /// <summary>
+    /// Pull up to <paramref name="batchSize"/> rows that are due for dispatch
+    /// (not processed, not poisoned, <c>NextAttemptUtc</c> is <c>null</c> or in the past),
+    /// ordered by <c>OccurredAtUtc</c> ascending so older events ship first.
+    /// </summary>
+    /// <remarks>
+    /// <c>EfOutboxStore</c> calls <c>IgnoreQueryFilters()</c> here so the worker — which
+    /// runs without a tenant context — drains rows for ALL tenants.
+    /// </remarks>
     Task<IReadOnlyList<OutboxMessage>> FetchDueAsync(int batchSize, CancellationToken cancellationToken);
 
-    // Mark as successfully delivered. The store is expected to persist this immediately.
+    /// <summary>
+    /// Mark the message as successfully delivered and persist immediately.
+    /// </summary>
     Task MarkProcessedAsync(OutboxMessage message, CancellationToken cancellationToken);
 
-    // Record a failure. After MaxAttempts the store marks the row poisoned so the worker
-    // stops picking it up.
+    /// <summary>
+    /// Record a publish failure: bump <c>AttemptCount</c>, set <c>NextAttemptUtc</c> to the
+    /// caller-computed backoff, and (when <paramref name="poisoned"/> is <c>true</c>) flag
+    /// the row so the worker stops picking it up. Persisted immediately.
+    /// </summary>
     Task RecordFailureAsync(OutboxMessage message, string error, DateTime? nextAttemptUtc, bool poisoned, CancellationToken cancellationToken);
 }

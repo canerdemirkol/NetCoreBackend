@@ -1,19 +1,37 @@
 namespace NetCoreBackend.NArchitecture.Core.Security.Encryption;
 
-// Strongly-typed wrapper around the 32-byte AES-256 master key used by
-// AesGcmEncryptionHelper. Registering a bare `byte[]` as a DI Singleton conflicts with
-// every other byte[] service in the graph; this type exists purely so the resolution
-// site is unambiguous.
-//
-// Production: load the key from a secret store at startup, validate its length, register
-// once as Singleton. Never bind from appsettings.json directly.
+/// <summary>
+/// Strongly-typed wrapper around the 32-byte AES-256 master key used by
+/// <see cref="AesGcmEncryptionHelper"/>. Exists primarily to disambiguate DI resolution
+/// — a bare <c>byte[]</c> registered as a Singleton would conflict with every other
+/// <c>byte[]</c> service in the graph.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <strong>Production:</strong> load the key from a secret store at startup (Azure Key
+/// Vault, AWS Secrets Manager, sealed cluster secret), wrap it in this type, and register
+/// once as Singleton. Never bind from <c>appsettings.json</c> directly.
+/// </para>
+/// <para>
+/// <strong>Mutation safety:</strong> the underlying buffer is held in a private field and
+/// defensively copied on both ingress (ctor) and egress (<see cref="Value"/> getter), so
+/// neither the caller of the constructor nor a reader of <see cref="Value"/> can mutate
+/// the stored master key. Use <see cref="AsSpan"/> for the allocation-free read path that
+/// most <see cref="System.Security.Cryptography.AesGcm"/> overloads accept directly.
+/// </para>
+/// </remarks>
 public sealed class EncryptionMasterKey
 {
-    // Stored as a private field, not as a record's auto-property, so the underlying buffer
-    // is never handed out by reference. A defensive copy is taken on each Value read so
-    // callers can't mutate the master key through the returned array.
     private readonly byte[] _value;
 
+    /// <summary>
+    /// Construct from a 32-byte buffer. A defensive copy is taken so the caller may zero
+    /// or reuse the input array without invalidating the master key.
+    /// </summary>
+    /// <param name="value">Exactly 32 bytes (AES-256).</param>
+    /// <exception cref="System.ArgumentNullException"><paramref name="value"/> is null.</exception>
+    /// <exception cref="System.ArgumentException">Length is not exactly
+    /// <see cref="AesGcmEncryptionHelper.KeySize"/>.</exception>
     public EncryptionMasterKey(byte[] value)
     {
         ArgumentNullException.ThrowIfNull(value);
@@ -22,14 +40,18 @@ public sealed class EncryptionMasterKey
                 $"EncryptionMasterKey must be exactly {AesGcmEncryptionHelper.KeySize} bytes (was {value.Length}).",
                 nameof(value));
 
-        // Defensive copy IN so callers can clear their buffer without invalidating the key.
         _value = (byte[])value.Clone();
     }
 
-    // Defensive copy OUT — caller mutations don't affect the stored key. The allocation cost
-    // is negligible compared to the AES-GCM operation that immediately follows.
+    /// <summary>
+    /// Returns a fresh 32-byte copy of the master key. Each read allocates — prefer
+    /// <see cref="AsSpan"/> on hot paths.
+    /// </summary>
     public byte[] Value => (byte[])_value.Clone();
 
-    // Allocation-free read for hot paths (e.g. AesGcm.Encrypt accepts ReadOnlySpan<byte>).
+    /// <summary>
+    /// Allocation-free read-only view over the stored key for use with
+    /// <c>Span</c>-accepting cryptography APIs.
+    /// </summary>
     public ReadOnlySpan<byte> AsSpan() => _value;
 }
