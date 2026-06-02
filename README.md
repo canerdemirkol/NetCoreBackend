@@ -67,7 +67,7 @@
 | [`Core.Translation.AmazonTranslate.DependencyInjection`](Core.Translation.AmazonTranslate.DependencyInjection/README.md) | DI registration |
 | [`Core.Outbox`](Core.Outbox/README.md) | Transactional outbox — `OutboxMessage` entity, `IOutboxStore`/`IOutboxPublisher`, `EfOutboxStore<TDbContext>` |
 | [`Core.Outbox.DependencyInjection`](Core.Outbox.DependencyInjection/README.md) | `AddOutbox<TDbContext>()` — store + `OutboxPublisherWorker` BackgroundService |
-| [`Core.Test`](Core.Test/README.md) | Base test helpers and AutoMapper test setup |
+| [`Core.Test`](Core.Test/README.md) | Test helpers (`BaseFakeData`, `MockRepositoryHelper`, `BaseMockRepository`) + framework regression suite (`dotnet test`). Test SDK refs `PrivateAssets="all"` — consumers sadece helpers'ı alır. |
 
 ---
 

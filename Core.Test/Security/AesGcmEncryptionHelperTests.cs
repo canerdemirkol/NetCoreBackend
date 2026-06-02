@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using NetCoreBackend.NArchitecture.Core.Security.Encryption;
 
-namespace NetCoreBackend.NArchitecture.Core.Tests.Security;
+namespace NetCoreBackend.NArchitecture.Core.Test.Security;
 
 public sealed class AesGcmEncryptionHelperTests
 {

@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Moq;
 using NetCoreBackend.NArchitecture.Core.Persistence.Repositories;
 
-namespace NetCoreBackend.NArchitecture.Core.Tests.Persistence;
+namespace NetCoreBackend.NArchitecture.Core.Test.Persistence;
 
 // Regression coverage for the R1 cascade fixes:
 //   - EditEntityPropertiesToAdd hard-errors when TenantSetter is missing for a tenant entity.

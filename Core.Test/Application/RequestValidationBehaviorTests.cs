@@ -4,7 +4,7 @@ using NetCoreBackend.NArchitecture.Core.Application.Pipelines.Validation;
 using NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.Exception.Types;
 using ValidationException = NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.Exception.Types.ValidationException;
 
-namespace NetCoreBackend.NArchitecture.Core.Tests.Application;
+namespace NetCoreBackend.NArchitecture.Core.Test.Application;
 
 // Regression coverage for the R2 fix that gave each validator its own ValidationContext.
 //

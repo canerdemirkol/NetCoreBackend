@@ -1,6 +1,6 @@
 using NetCoreBackend.NArchitecture.Core.Persistence.Paging;
 
-namespace NetCoreBackend.NArchitecture.Core.Tests.Persistence;
+namespace NetCoreBackend.NArchitecture.Core.Test.Persistence;
 
 public sealed class PaginateTests
 {

@@ -1,6 +1,25 @@
 # Core.Test
 
-Unit test yardımcıları. Fake data üretimi, mock repository kurulumu ve AutoMapper test altyapısı.
+İki rolü tek projede birleştirir:
+
+1. **Consuming app'lere shipping edilen test helpers** — `BaseFakeData`, `MockRepositoryHelper`, `BaseMockRepository`, `ValidationErrorCodes`. NuGet üzerinden tüketilir.
+2. **Framework'ün kendi regression test suite'i** — `dotnet test` ile çalışan xUnit testleri (cascade guard, validation race, paginate, AES-GCM, outbox vs.).
+
+> Test SDK paketleri (`Microsoft.NET.Test.Sdk`, `xunit`, `xunit.runner.visualstudio`, `coverlet.collector`, `FluentValidation`, `Microsoft.EntityFrameworkCore.InMemory`) `PrivateAssets="all"` ile referans edilir — tüketici uygulamaya transitive olarak akmaz. Consumer sadece `Moq`, `AutoMapper`, `Microsoft.EntityFrameworkCore` bağımlılıklarını alır.
+
+## Çalıştırma
+
+```bash
+# Framework testleri
+dotnet test Core.Test/Core.Test.csproj
+
+# Tüm solution
+dotnet test
+```
+
+---
+
+## Helpers (consumer-facing)
 
 ## BaseFakeData
 
@@ -75,3 +94,17 @@ Validation sonuçlarını assert ederken kullanılır:
 var errors = validator.Validate(command).Errors;
 Assert.Contains(errors, e => e.ErrorCode == ValidationErrorCodes.NotEmptyValidator);
 ```
+
+---
+
+## Framework regression suite (internal)
+
+`Core.Test/Application/`, `Persistence/`, `Security/`, `Outbox/` altındaki xUnit testleri framework'ün kendi davranışını koruyor. Bunlar consumer paketine **gitmez** — sadece `dotnet test` zamanında compile ve çalıştırılırlar.
+
+| Test sınıfı | Kapsam |
+|---|---|
+| `RequestValidationBehaviorTests` | R2 fix regression — concurrent validator'larda per-context isolation |
+| `TenantCascadeTests` | R1 fix regression — soft-delete cascade tenant guard + `TenantSetter null` hard error |
+| `PaginateTests` | R3 fix regression — `size <= 0` ve `from > index` guard'ları |
+| `AesGcmEncryptionHelperTests` | round-trip, tamper detection, key mismatch, associated-data mismatch |
+| `EfOutboxStoreTests` | `FetchDueAsync` ordering + filtering, `AppendAsync` non-save semantik, `RecordFailureAsync` bookkeeping |

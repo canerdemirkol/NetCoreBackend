@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using NetCoreBackend.NArchitecture.Core.Outbox.EfPersistence;
 using NetCoreBackend.NArchitecture.Core.Outbox.Entities;
 
-namespace NetCoreBackend.NArchitecture.Core.Tests.Outbox;
+namespace NetCoreBackend.NArchitecture.Core.Test.Outbox;
 
 public sealed class EfOutboxStoreTests
 {
