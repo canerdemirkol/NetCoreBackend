@@ -55,8 +55,9 @@ Hangisini hangi senaryoda kullanacağına bağlı, ama tipik bir multi-tenant AP
 ```jsonc
 {
   "ConnectionStrings": {
-    "Default": "Server=localhost;Database=MyApp;Trusted_Connection=True;TrustServerCertificate=True",
-    "Redis": "localhost:6379"
+    "AppDb":    "Server=localhost;Database=MyApp;Trusted_Connection=True;TrustServerCertificate=True",
+    "Redis":    "localhost:6379",
+    "RabbitMq": "amqp://guest:guest@localhost:5672/"      // see § 12 for production secrets
   },
 
   "TokenOptions": {
@@ -85,13 +86,30 @@ Hangisini hangi senaryoda kullanacağına bağlı, ama tipik bir multi-tenant AP
     "SenderEmail": "noreply@myapp.com",
     "UserName": "smtp-user",
     "Password": "smtp-pass",
-    "AuthenticationRequired": true
-  }
+    "AuthenticationRequired": true,
+    "TlsMode": "StartTlsWhenAvailable"     // None | Auto | SslOnConnect | StartTls | StartTlsWhenAvailable
+  },
+
+  "OutboxOptions": {
+    "BatchSize": 100,                      // her polling round'unda kaç satır işlensin
+    "MaxAttempts": 8,                      // bunu aşan satır poison olur
+    "IdlePollDelay": "00:00:02",           // boş geçen round sonrası bekleme süresi
+    "BaseRetryDelay": "00:00:02",          // exponential backoff base
+    "MaxRetryDelay": "00:10:00"            // retry delay'in üst sınırı
+  },
+
+  "RabbitMqOptions": {
+    "ExchangeName": "events",              // topic exchange
+    "ExchangeType": "topic"
+  },
+
+  "EncryptionMasterKey": ""                // base64-encoded 32-byte AES-256 key — bkz. § 12
 }
 ```
 
-> JWT `SecurityKey` minimum 32 byte UTF-8 olmak zorunda; `SecurityKeyHelper` daha kısa key'i
-> `ArgumentException` ile reddeder.
+> **`SecurityKey` minimum 32 byte UTF-8** olmak zorunda; `TokenOptions.Validate()` startup'ta
+> bunu kontrol eder. **`EncryptionMasterKey` base64-encoded 32 byte** (AES-256). İkisi de
+> production'da appsettings'de DEĞİL — secret store'dan gelmeli (§ 12).
 
 ---
 
@@ -119,6 +137,9 @@ using NetCoreBackend.NArchitecture.Core.Security.JWT;
 var builder = WebApplication.CreateBuilder(args);
 
 // ─── 1. Configuration objects ─────────────────────────────────────────────────
+// AddSecurityServices() içinde TokenOptions.Validate() startup'ta çağrılır —
+// Audience, Issuer, SecurityKey (≥32 byte), AccessTokenExpiration, RefreshTokenTtlDays
+// eksikse uygulama başlamaz (silent 0 / IDX10720 confusion'unun önüne geçer).
 var tokenOptions = builder.Configuration
     .GetSection("TokenOptions").Get<TokenOptions>()
     ?? throw new InvalidOperationException("TokenOptions missing.");
@@ -164,7 +185,9 @@ builder.Services.AddMediatR(cfg =>
 builder.Services.AddNArchitecturePipelineBehaviors();    // ← Authorization, Caching, Logging, ...
 
 // ─── 7. Pipeline behavior'ların gereksinimleri ───────────────────────────────
-builder.Services.AddHttpContextAccessor();                                          // Auth, Tenant, Caching, Logging
+// NOT: AddNArchitecturePipelineBehaviors() artık IHttpContextAccessor'ı kendisi
+// TryAddSingleton ile register ediyor — manuel çağrı opsiyonel (idempotent).
+// builder.Services.AddHttpContextAccessor();                                       // (opsiyonel) Auth, Tenant, Caching, Logging
 builder.Services.AddStackExchangeRedisCache(o =>                                    // CachingBehavior, CacheRemovingBehavior
     o.Configuration = builder.Configuration.GetConnectionString("Redis"));
 // Alternatif (dev/local): builder.Services.AddDistributedMemoryCache();
@@ -417,15 +440,155 @@ POST /api/auth/impersonate/exit     ← impersonation/SuperAdmin token → plain
 
 ## 11. Hızlı checklist — productıon'a çıkmadan önce
 
-- [ ] `TokenOptions.SecurityKey` ≥ 32 byte UTF-8 ve KMS/secret store'dan geliyor
+- [ ] `TokenOptions.SecurityKey` ≥ 32 byte UTF-8 ve KMS/secret store'dan geliyor (appsettings'de DEĞİL)
 - [ ] `TokenOptions.RefreshTokenTtlDays` ayarlı (0 değil — yoksa refresh anında expire)
+- [ ] `EncryptionMasterKey` 32-byte base64 ve secret store'dan geliyor (TOTP secret, recovery codes vb. için)
 - [ ] Redis bağlantısı çalışıyor (in-memory cache production'a uygun değil)
+- [ ] RabbitMQ/Kafka connection string secret store'dan geliyor (`amqp://user:pass@...` plain config'de DURMAZ)
 - [ ] `Tenant.Identifier` ve `Domain` üzerinde unique index var
 - [ ] `User.Email` üzerinde `(TenantId, Email)` composite unique index var
-- [ ] `OtpAuthenticator.SecretKey` için column-level encryption düşünülmüş
+- [ ] `OtpAuthenticator.SecretKey` `AesGcmEncryptionHelper` ile encrypt'lenmiş kaydediliyor
 - [ ] `ConfigureCustomExceptionMiddleware` middleware sırasında ilk sırada
 - [ ] `UseAuthentication` `UseMultiTenancy`'den önce
 - [ ] Login handler `IsLegacyHash` kontrolü yapıp PBKDF2'ye lazy migration yapıyor (eski sistem migrate ediliyorsa)
 - [ ] CI/CD migration ayrı bir step'te (UseDbMigrationApplier sadece dev/test için)
 - [ ] Validation hataları (`PageRequest [Range]` vb.) controller'larda ModelState check'i ile yakalanıyor
 - [ ] Sensitive command'lar `ISensitiveRequest` implement ediyor
+- [ ] Outbox kullanılıyorsa `OutboxMessages` tablosuna migration uygulanmış (`ConfigureOutbox()` model'da çağrılı)
+- [ ] `IOutboxPublisher` implementasyonu kayıtlı ve broker bağlantısı sağlıklı
+- [ ] Outbox poison row'lar için bir alerting / dashboard query'si var (`SELECT * FROM OutboxMessages WHERE IsPoisoned = 1`)
+
+---
+
+## 12. Outbox & RabbitMQ Configuration
+
+> **Niye Outbox lazım?** Detaylı problem/solution: [Core.Outbox/README.md](./Core.Outbox/README.md).
+> Bu bölüm sadece config + secret yönetimi tarafını anlatır.
+
+### 12.1 Connection strings
+
+`appsettings.json` içinde **placeholder** olarak durur, **production değer SECRET STORE'dan** gelir:
+
+```jsonc
+"ConnectionStrings": {
+  "AppDb":    "...",                              // dev için local SQL
+  "RabbitMq": "amqp://guest:guest@localhost:5672/"  // dev için local broker
+}
+```
+
+### 12.2 Dev / Test → User-secrets
+
+Her developer'ın machine'ında broker kurulu olabilir; credential'lar farklı olur. **User-secrets** appsettings'i kirletmeden lokal değer enjekte eder:
+
+```bash
+cd MyApp.WebApi
+dotnet user-secrets init
+dotnet user-secrets set "ConnectionStrings:RabbitMq" "amqp://caner:dev-pass@localhost:5672/"
+dotnet user-secrets set "ConnectionStrings:AppDb"    "Server=localhost;Database=MyApp_Caner;..."
+dotnet user-secrets set "EncryptionMasterKey"        "Y2gxdHF1aWNrLWJhc2U2NC0zMi1ieXRlcy1mb3ItZGV2"
+dotnet user-secrets set "TokenOptions:SecurityKey"   "dev-only-32-byte-secret-rotate-me-pls"
+```
+
+`.NET Generic Host` user-secrets'i `Development` ortamında otomatik okur — `appsettings.json`'daki placeholder'ları override eder.
+
+### 12.3 Production → Secret manager
+
+| Platform | Secret store | Bind komutu |
+|---|---|---|
+| Azure | Key Vault | `builder.Configuration.AddAzureKeyVault(...)` |
+| AWS | Secrets Manager / Parameter Store | `builder.Configuration.AddSystemsManager(...)` |
+| Kubernetes | Sealed Secrets / External Secrets Operator | env var → `__` separator (`ConnectionStrings__RabbitMq`) |
+| Docker Compose | `secrets:` section + file mount | `/run/secrets/rabbitmq` → custom provider |
+
+**Asgari kural:** aşağıdaki key'ler appsettings.json'da plain durmaz, hepsi secret store'dan gelir:
+
+- `ConnectionStrings:AppDb`
+- `ConnectionStrings:RabbitMq` (veya Kafka bootstrap servers + SASL credentials)
+- `ConnectionStrings:Redis` (auth varsa)
+- `TokenOptions:SecurityKey`
+- `EncryptionMasterKey`
+- `MailSettings:Password`
+
+### 12.4 EncryptionMasterKey üretmek
+
+`AesGcmEncryptionHelper.GenerateKey()` 32 byte üretir. Bunu base64'leyip secret store'a yaz:
+
+```csharp
+// One-off script veya REPL:
+var key = AesGcmEncryptionHelper.GenerateKey();
+Console.WriteLine(Convert.ToBase64String(key));
+// → "M3kP...44 char base64 string..." (32 byte = ~44 char)
+```
+
+`EncryptionMasterKey` rotation gerekirse blob layout'a versiyon byte'ı prefix'le; decrypt sırasında prefix'e göre key seç (detaylar: `Core.Security/Encryption/AesGcmEncryptionHelper.cs` üst yorumu).
+
+### 12.5 Program.cs — DI
+
+```csharp
+using NetCoreBackend.NArchitecture.Core.Outbox.DependencyInjection;
+using NetCoreBackend.NArchitecture.Core.Security.Encryption;
+using RabbitMQ.Client;
+
+// 1. DbContext
+builder.Services.AddDbContext<AppDbContext>(opt =>
+    opt.UseSqlServer(builder.Configuration.GetConnectionString("AppDb")));
+
+// 2. Outbox
+builder.Services.Configure<OutboxOptions>(
+    builder.Configuration.GetSection("OutboxOptions"));   // appsettings'ten options bind
+builder.Services.AddOutbox<AppDbContext>();               // store + worker
+
+// 3. RabbitMQ connection — Singleton (connection pahalı, channel ucuz)
+builder.Services.AddSingleton<IConnection>(sp =>
+{
+    var factory = new ConnectionFactory
+    {
+        Uri = new Uri(builder.Configuration.GetConnectionString("RabbitMq")!),
+        AutomaticRecoveryEnabled = true,
+        NetworkRecoveryInterval  = TimeSpan.FromSeconds(10),
+        ClientProvidedName       = "myapp-publisher"
+    };
+    return factory.CreateConnectionAsync().GetAwaiter().GetResult();
+});
+
+// 4. Senin IOutboxPublisher implementasyonun
+builder.Services.AddScoped<IOutboxPublisher, RabbitMqOutboxPublisher>();
+
+// 5. AES-GCM master key — startup'ta tek yükle, Singleton'la enjekte et.
+// EncryptionMasterKey wrapper'ı 32-byte uzunluk doğrulamasını ctor'da yapar; ayrıca DI
+// grafında bare `byte[]` Singleton'ların birbirine karışmasını engeller.
+byte[] masterKey = Convert.FromBase64String(
+    builder.Configuration["EncryptionMasterKey"]
+    ?? throw new InvalidOperationException("EncryptionMasterKey eksik."));
+builder.Services.AddSingleton(new EncryptionMasterKey(masterKey));
+```
+
+### 12.6 Migration
+
+`OutboxMessages` tablosunu oluştur:
+
+```bash
+dotnet ef migrations add AddOutbox
+dotnet ef database update
+```
+
+`ConfigureOutbox()` extension method `OnModelCreating`'de çağrılmış olmalı (örneği [Core.Outbox/README.md § 3.1](./Core.Outbox/README.md#31-dbcontexte-outbox-tablosunu-ekle)).
+
+### 12.7 Poison message monitoring
+
+Outbox poison row'lar sessizce birikmemeli — alerting kur:
+
+```sql
+-- Operator dashboard query
+SELECT TOP 100 Id, EventType, AttemptCount, Error, OccurredAtUtc
+FROM OutboxMessages
+WHERE IsPoisoned = 1
+ORDER BY OccurredAtUtc DESC;
+```
+
+Bir poison row tespit edilince:
+1. Root cause'u bul (broker down? schema mismatch? consumer bug?).
+2. Düzelt ve **manuel reset** et: `UPDATE OutboxMessages SET IsPoisoned = 0, AttemptCount = 0, NextAttemptUtc = NULL WHERE Id = '...'`.
+3. Worker bir sonraki polling round'unda yakalayıp tekrar dener.
+
+Eğer event artık gerekli değilse `ProcessedAtUtc = GETUTCDATE()` ile **arşivle**, silme.

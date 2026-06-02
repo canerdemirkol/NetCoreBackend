@@ -11,9 +11,7 @@
 		<!-- Cloudinary -->
 		<PackageVersion Include="CloudinaryDotNet" Version="1.27.9" />
 		<!-- Elasticsearch -->
-		<PackageVersion Include="Elasticsearch.Net" Version="7.17.5" />
-		<PackageVersion Include="NEST" Version="7.17.5" />
-		<PackageVersion Include="NEST.JsonNetSerializer" Version="7.17.5" />
+		<PackageVersion Include="Elastic.Clients.Elasticsearch" Version="8.19.0" />
 		<!-- FluentValidation -->
 		<PackageVersion Include="FluentValidation" Version="12.1.1" />
 		<PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
@@ -23,11 +21,10 @@
 		<!-- MediatR -->
 		<PackageVersion Include="MediatR" Version="14.0.0" />
 		<!-- Microsoft AspNetCore -->
+		<!-- HTTP / MVC types come from <FrameworkReference Include="Microsoft.AspNetCore.App" />
+		     in libraries that need them. The legacy 2.3.0 standalone packages are deprecated
+		     and were dropped after the .NET 10 upgrade. -->
 		<PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.5" />
-		<PackageVersion Include="Microsoft.AspNetCore.Http" Version="2.3.0" />
-		<PackageVersion Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.3.0" />
-		<PackageVersion Include="Microsoft.AspNetCore.Http.Extensions" Version="2.3.0" />
-		<PackageVersion Include="Microsoft.AspNetCore.Mvc.Core" Version="2.3.0" />
 		<!-- Microsoft EntityFrameworkCore -->
 		<PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.5" />
 		<PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.5" />
@@ -39,6 +36,7 @@
 		<PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.5" />
 		<PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.5" />
 		<PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.5" />
+		<PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.5" />
 		<PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.5" />
 		<PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.5" />
 		<PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.5" />
@@ -50,6 +48,10 @@
 		<PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.15.0" />
 		<!-- Testing -->
 		<PackageVersion Include="Moq" Version="4.20.72" />
+		<PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+		<PackageVersion Include="xunit" Version="2.9.3" />
+		<PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
+		<PackageVersion Include="coverlet.collector" Version="6.0.4" />
 		<!-- Serialization -->
 		<PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
 		<PackageVersion Include="YamlDotNet" Version="16.3.0" />

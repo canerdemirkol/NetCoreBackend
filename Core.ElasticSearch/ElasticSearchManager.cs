@@ -1,201 +1,187 @@
-﻿using Elasticsearch.Net;
+using Elastic.Clients.Elasticsearch;
+using Elastic.Clients.Elasticsearch.IndexManagement;
+using Elastic.Clients.Elasticsearch.QueryDsl;
+using Elastic.Transport.Products.Elasticsearch;
 using NetCoreBackend.NArchitecture.Core.ElasticSearch.Constants;
 using NetCoreBackend.NArchitecture.Core.ElasticSearch.Models;
-using Nest;
-using Nest.JsonNetSerializer;
-using Newtonsoft.Json;
 
 namespace NetCoreBackend.NArchitecture.Core.ElasticSearch;
 
+// Elastic.Clients.Elasticsearch 8.x (System.Text.Json native) implementation.
+//
+// Migration from NEST 7.x:
+//   - ElasticClient → ElasticsearchClient
+//   - ConnectionSettings → ElasticsearchClientSettings
+//   - ISearchResponse<T> → SearchResponse<T>; response.Hits.Hits is the list of HitMetadata<T>
+//   - response.IsValid → response.IsValidResponse (8.x naming)
+//   - Errors: response.ElasticsearchServerError?.Error?.Reason / Type replaces NEST's ServerError
+//   - Serializer: System.Text.Json is the default; no Newtonsoft glue layer needed.
 public class ElasticSearchManager : IElasticSearch
 {
-    // NEST guidance: reuse a single ElasticClient instance per application. Creating a new
-    // client on every call discards the internal connection pool warm-up, serializer caches,
-    // and pipeline configuration — adding measurable overhead per request.
-    private readonly ElasticClient _client;
+    private readonly ElasticsearchClient _client;
 
     public ElasticSearchManager(ElasticSearchConfig configuration)
     {
-        SingleNodeConnectionPool pool = new(new Uri(configuration.ConnectionString));
-        // Newtonsoft.Json is used here (instead of System.Text.Json) because NEST 7.x ships
-        // with Nest.JsonNetSerializer for ReferenceLoopHandling and similar serializer knobs.
-        // NEST does not currently offer a System.Text.Json-based serializer; migrating to
-        // Elastic.Clients.Elasticsearch 8.x (which uses STJ natively) is a separate effort
-        // and is intentionally not part of this layer.
-        ConnectionSettings connectionSettings = new ConnectionSettings(
-            pool,
-            sourceSerializer: (builtInSerializer, settings) =>
-                new JsonNetSerializer(
-                    builtInSerializer,
-                    settings,
-                    jsonSerializerSettingsFactory: () =>
-                        new JsonSerializerSettings { ReferenceLoopHandling = ReferenceLoopHandling.Ignore }
-                )
-        );
-        _client = new ElasticClient(connectionSettings);
+        ElasticsearchClientSettings settings = new(new Uri(configuration.ConnectionString));
+        _client = new ElasticsearchClient(settings);
     }
 
-    public IReadOnlyDictionary<IndexName, IndexState> GetIndexList()
+    public async Task<IReadOnlyCollection<IndexInfo>> GetIndexListAsync(CancellationToken cancellationToken = default)
     {
-        return _client.Indices.Get(new GetIndexRequest(Indices.All)).Indices;
+        GetIndexResponse response = await _client.Indices.GetAsync(new GetIndexRequest(Indices.All), cancellationToken).ConfigureAwait(false);
+        return response.Indices
+            .Select(kvp => new IndexInfo(
+                Name: kvp.Key.ToString(),
+                Aliases: kvp.Value.Aliases?.Select(a => a.Key.ToString()).ToArray() ?? Array.Empty<string>()))
+            .ToArray();
     }
 
-    public async Task<IElasticSearchResult> InsertManyAsync(string indexName, object[] items)
+    public async Task<IElasticSearchResult> InsertManyAsync(string indexName, object[] items, CancellationToken cancellationToken = default)
     {
         // Sending an empty Bulk request still incurs a round trip; short-circuit so callers
         // that build the array conditionally don't have to add the same guard.
         if (items is null || items.Length == 0)
             return new ElasticSearchResult(success: true, message: ElasticSearchMessages.Success);
 
-        ElasticClient elasticClient = getElasticClient(indexName);
-        BulkResponse response = await elasticClient.BulkAsync(a => a.Index(indexName).IndexMany(items));
-
-        return new ElasticSearchResult(
-            response.IsValid,
-            message: response.IsValid
-                ? ElasticSearchMessages.Success
-                : response.ServerError?.Error?.Reason ?? response.DebugInformation
-        );
+        GuardIndexName(indexName);
+        BulkResponse response = await _client.BulkAsync(b => b.Index(indexName).IndexMany(items), cancellationToken).ConfigureAwait(false);
+        return ToResult(response);
     }
 
-    public async Task<IElasticSearchResult> CreateNewIndexAsync(IndexModel indexModel)
+    public async Task<IElasticSearchResult> CreateNewIndexAsync(IndexModel indexModel, CancellationToken cancellationToken = default)
     {
-        ElasticClient elasticClient = getElasticClient(indexModel.IndexName);
+        GuardIndexName(indexModel.IndexName);
 
-        // Exists-then-create is racy when two callers hit this concurrently: both observe "not
-        // exists" and both attempt create, leaving one with an Elasticsearch-side
-        // resource_already_exists_exception. Skip the existence pre-check and rely on the
-        // create response — any post-creation "already exists" is treated as success because
-        // the desired end-state is satisfied.
-        CreateIndexResponse? response = await elasticClient.Indices.CreateAsync(
+        // Exists-then-create is racy when two callers hit this concurrently: both observe
+        // "not exists" and both attempt create, leaving one with an Elasticsearch-side
+        // resource_already_exists_exception. Skip the pre-check and inspect the response —
+        // an "already exists" error from a concurrent create satisfies the desired end state.
+        CreateIndexResponse response = await _client.Indices.CreateAsync(
             indexModel.IndexName,
-            selector: se =>
-                se.Settings(a => a.NumberOfReplicas(indexModel.NumberOfReplicas).NumberOfShards(indexModel.NumberOfShards))
-                    .Aliases(x => x.Alias(indexModel.AliasName))
-        );
+            c => c
+                .Settings(s => s
+                    .NumberOfReplicas(indexModel.NumberOfReplicas)
+                    .NumberOfShards(indexModel.NumberOfShards))
+                .Aliases(a => a.Add(indexModel.AliasName, _ => { })),
+            cancellationToken).ConfigureAwait(false);
 
-        if (response.IsValid)
+        if (response.IsValidResponse)
             return new ElasticSearchResult(success: true, message: ElasticSearchMessages.Success);
 
-        bool alreadyExists = response.ServerError?.Error?.Type == "resource_already_exists_exception";
+        bool alreadyExists = response.ElasticsearchServerError?.Error?.Type == "resource_already_exists_exception";
         if (alreadyExists)
             return new ElasticSearchResult(success: false, message: ElasticSearchMessages.IndexAlreadyExists);
 
-        return new ElasticSearchResult(success: false, message: response.ServerError?.Error?.Reason ?? response.DebugInformation);
+        return new ElasticSearchResult(success: false, message: response.ElasticsearchServerError?.Error?.Reason ?? response.DebugInformation);
     }
 
-    public async Task<IElasticSearchResult> DeleteByElasticIdAsync(ElasticSearchModel model)
+    public async Task<IElasticSearchResult> DeleteByElasticIdAsync(ElasticSearchModel model, CancellationToken cancellationToken = default)
     {
-        ElasticClient elasticClient = getElasticClient(model.IndexName);
-        DeleteResponse? response = await elasticClient.DeleteAsync<object>(
-            model.ElasticId,
-            selector: x => x.Index(model.IndexName)
-        );
-        return new ElasticSearchResult(
-            response.IsValid,
-            message: response.IsValid ? ElasticSearchMessages.Success : response.ServerError?.Error?.Reason ?? response.DebugInformation
-        );
+        GuardIndexName(model.IndexName);
+        DeleteResponse response = await _client.DeleteAsync(model.IndexName, model.ElasticId, cancellationToken).ConfigureAwait(false);
+        return ToResult(response);
     }
 
-    public async Task<List<ElasticSearchGetModel<T>>> GetAllSearch<T>(SearchParameters parameters)
+    public async Task<List<ElasticSearchGetModel<T>>> GetAllSearch<T>(SearchParameters parameters, CancellationToken cancellationToken = default)
         where T : class
     {
-        ElasticClient elasticClient = getElasticClient(parameters.IndexName);
-        ISearchResponse<T>? searchResponse = await elasticClient.SearchAsync<T>(s =>
-            s.Index(Indices.Index(parameters.IndexName)).From(parameters.From).Size(parameters.Size)
-        );
+        GuardIndexName(parameters.IndexName);
+        SearchResponse<T> response = await _client.SearchAsync<T>(s => s
+            .Indices(parameters.IndexName)
+            .From(parameters.From)
+            .Size(parameters.Size)
+            .Query(q => q.MatchAll(_ => { })),
+            cancellationToken).ConfigureAwait(false);
 
-        var list = searchResponse.Hits.Select(x => new ElasticSearchGetModel<T> { ElasticId = x.Id, Item = x.Source }).ToList();
-
-        return list;
+        return ProjectHits(response);
     }
 
-    public async Task<List<ElasticSearchGetModel<T>>> GetSearchByField<T>(SearchByFieldParameters fieldParameters)
+    public async Task<List<ElasticSearchGetModel<T>>> GetSearchByField<T>(SearchByFieldParameters fieldParameters, CancellationToken cancellationToken = default)
         where T : class
     {
-        ElasticClient elasticClient = getElasticClient(fieldParameters.IndexName);
-        ISearchResponse<T>? searchResponse = await elasticClient.SearchAsync<T>(s =>
-            s.Index(fieldParameters.IndexName)
-                .From(fieldParameters.From)
-                .Size(fieldParameters.Size)
-                .Query(q => q.Term(t => t.Field(fieldParameters.FieldName).Value(fieldParameters.Value)))
-        );
+        GuardIndexName(fieldParameters.IndexName);
+        SearchResponse<T> response = await _client.SearchAsync<T>(s => s
+            .Indices(fieldParameters.IndexName)
+            .From(fieldParameters.From)
+            .Size(fieldParameters.Size)
+            .Query(q => q.Term(t => t.Field(fieldParameters.FieldName).Value(fieldParameters.Value))),
+            cancellationToken).ConfigureAwait(false);
 
-        var list = searchResponse.Hits.Select(x => new ElasticSearchGetModel<T> { ElasticId = x.Id, Item = x.Source }).ToList();
-        return list;
+        return ProjectHits(response);
     }
 
-    public async Task<List<ElasticSearchGetModel<T>>> GetSearchBySimpleQueryString<T>(SearchByQueryParameters queryParameters)
+    public async Task<List<ElasticSearchGetModel<T>>> GetSearchBySimpleQueryString<T>(SearchByQueryParameters queryParameters, CancellationToken cancellationToken = default)
         where T : class
     {
-        const string analyzer = "standard",
-            minimumShouldMatch = "30%";
-        ElasticClient elasticClient = getElasticClient(queryParameters.IndexName);
-        ISearchResponse<T>? searchResponse = await elasticClient.SearchAsync<T>(s =>
-            s.Index(queryParameters.IndexName)
-                .From(queryParameters.From)
-                .Size(queryParameters.Size)
-                .MatchAll()
-                .Query(a =>
-                    a.SimpleQueryString(c =>
-                        c.Name(queryParameters.QueryName)
-                            .Boost(1.1)
-                            .Fields(queryParameters.Fields)
-                            .Query(queryParameters.Query)
-                            .Analyzer(analyzer)
-                            .DefaultOperator(Operator.Or)
-                            .Flags(SimpleQueryStringFlags.And | SimpleQueryStringFlags.Near)
-                            .Lenient()
-                            .AnalyzeWildcard(false)
-                            .MinimumShouldMatch(minimumShouldMatch)
-                            .FuzzyPrefixLength(0)
-                            .FuzzyMaxExpansions(50)
-                            .FuzzyTranspositions()
-                            .AutoGenerateSynonymsPhraseQuery(false)
-                    )
-                )
-        );
+        const string analyzer = "standard";
+        const string minimumShouldMatch = "30%";
+        GuardIndexName(queryParameters.IndexName);
 
-        var list = searchResponse.Hits.Select(x => new ElasticSearchGetModel<T> { ElasticId = x.Id, Item = x.Source }).ToList();
-        return list;
+        SearchResponse<T> response = await _client.SearchAsync<T>(s => s
+            .Indices(queryParameters.IndexName)
+            .From(queryParameters.From)
+            .Size(queryParameters.Size)
+            .Query(q => q.SimpleQueryString(sqs => sqs
+                .QueryName(queryParameters.QueryName)
+                .Boost(1.1f)
+                .Fields(Fields.FromStrings(queryParameters.Fields))
+                .Query(queryParameters.Query)
+                .Analyzer(analyzer)
+                .DefaultOperator(Operator.Or)
+                .Flags(SimpleQueryStringFlags.And | SimpleQueryStringFlags.Near)
+                .Lenient(true)
+                .AnalyzeWildcard(false)
+                .MinimumShouldMatch(minimumShouldMatch)
+                .FuzzyPrefixLength(0)
+                .FuzzyMaxExpansions(50)
+                .FuzzyTranspositions(true)
+                .AutoGenerateSynonymsPhraseQuery(false))),
+            cancellationToken).ConfigureAwait(false);
+
+        return ProjectHits(response);
     }
 
-    public async Task<IElasticSearchResult> InsertAsync(ElasticSearchInsertUpdateModel model)
+    public async Task<IElasticSearchResult> InsertAsync(ElasticSearchInsertUpdateModel model, CancellationToken cancellationToken = default)
     {
-        ElasticClient elasticClient = getElasticClient(model.IndexName);
-
-        IndexResponse? response = await elasticClient.IndexAsync(
+        GuardIndexName(model.IndexName);
+        IndexResponse response = await _client.IndexAsync(
             model.Item,
-            selector: i => i.Index(model.IndexName).Id(model.ElasticId).Refresh(Refresh.True)
-        );
-
-        return new ElasticSearchResult(
-            response.IsValid,
-            message: response.IsValid ? ElasticSearchMessages.Success : response.ServerError?.Error?.Reason ?? response.DebugInformation
-        );
+            i => i.Index(model.IndexName).Id(model.ElasticId).Refresh(Refresh.True),
+            cancellationToken).ConfigureAwait(false);
+        return ToResult(response);
     }
 
-    public async Task<IElasticSearchResult> UpdateByElasticIdAsync(ElasticSearchInsertUpdateModel model)
+    public async Task<IElasticSearchResult> UpdateByElasticIdAsync(ElasticSearchInsertUpdateModel model, CancellationToken cancellationToken = default)
     {
-        ElasticClient elasticClient = getElasticClient(model.IndexName);
-        UpdateResponse<object>? response = await elasticClient.UpdateAsync<object>(
+        GuardIndexName(model.IndexName);
+        // 8.x update API: doc is supplied as the partial object via a typed builder.
+        UpdateResponse<object> response = await _client.UpdateAsync<object, object>(
+            model.IndexName,
             model.ElasticId,
-            selector: u => u.Index(model.IndexName).Doc(model.Item)
-        );
-        return new ElasticSearchResult(
-            response.IsValid,
-            message: response.IsValid ? ElasticSearchMessages.Success : response.ServerError?.Error?.Reason ?? response.DebugInformation
-        );
+            u => u.Doc(model.Item),
+            cancellationToken).ConfigureAwait(false);
+        return ToResult(response);
     }
 
-    private ElasticClient getElasticClient(string indexName)
+    private static List<ElasticSearchGetModel<T>> ProjectHits<T>(SearchResponse<T> response) where T : class =>
+        response.Hits
+            .Where(h => h.Source is not null)
+            .Select(h => new ElasticSearchGetModel<T> { ElasticId = h.Id!, Item = h.Source! })
+            .ToList();
+
+    private static IElasticSearchResult ToResult(ElasticsearchResponse response) =>
+        new ElasticSearchResult(
+            response.IsValidResponse,
+            message: response.IsValidResponse
+                ? ElasticSearchMessages.Success
+                : response.ElasticsearchServerError?.Error?.Reason ?? response.DebugInformation);
+
+    private static void GuardIndexName(string indexName)
     {
         // Previous code passed `indexName` (the VALUE) as paramName, throwing
         // ArgumentNullException with a useless empty string as the parameter name.
         // Also: empty string is not technically "null" so ArgumentException is the correct type.
         if (string.IsNullOrWhiteSpace(indexName))
             throw new ArgumentException(ElasticSearchMessages.IndexNameCannotBeNullOrEmpty, nameof(indexName));
-
-        return _client;
     }
 }

@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Query;
+using EfQuery = Microsoft.EntityFrameworkCore.Query;
 using NetCoreBackend.NArchitecture.Core.Persistence.Dynamic;
 using NetCoreBackend.NArchitecture.Core.Persistence.Paging;
 using System.Collections;
@@ -63,6 +64,34 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
         return parameters == null
             ? await Context.Database.ExecuteSqlRawAsync(command).ConfigureAwait(false)
             : await Context.Database.ExecuteSqlRawAsync(command, parameters).ConfigureAwait(false);
+    }
+
+    // Tenant-safe bulk update (EF Core 7+ ExecuteUpdate).
+    //
+    // EF Core's ExecuteUpdate/ExecuteDelete emit a single SQL UPDATE/DELETE statement and DO
+    // apply the global query filter — but a caller can defeat that by writing `Query()` and
+    // chaining `IgnoreQueryFilters()` themselves. These wrappers start from Query() (which
+    // carries the filter) and additionally compose the predicate, then verify a tenant
+    // context exists before issuing the statement. SuperAdmin is exempt from the context
+    // check just like in raw SQL.
+    public async Task<int> ExecuteUpdateAsync(
+        Expression<Func<TEntity, bool>> predicate,
+        Action<EfQuery.UpdateSettersBuilder<TEntity>> setPropertyCalls,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(predicate);
+        ArgumentNullException.ThrowIfNull(setPropertyCalls);
+        GuardTenantContext();
+        return await Query().Where(predicate).ExecuteUpdateAsync(setPropertyCalls, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<int> ExecuteDeleteAsync(
+        Expression<Func<TEntity, bool>> predicate,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(predicate);
+        GuardTenantContext();
+        return await Query().Where(predicate).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
     }
 
     // Throws if the entity is tenant-aware but no tenant context is present (and caller is not SuperAdmin).

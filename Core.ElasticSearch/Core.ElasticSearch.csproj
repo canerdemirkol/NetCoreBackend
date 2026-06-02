@@ -18,8 +18,6 @@
     <RepositoryUrl></RepositoryUrl>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Elasticsearch.Net" />
-    <PackageReference Include="NEST"/>
-    <PackageReference Include="NEST.JsonNetSerializer"/>
+    <PackageReference Include="Elastic.Clients.Elasticsearch" />
   </ItemGroup>
 </Project>

@@ -17,12 +17,10 @@
     <RepositoryUrl></RepositoryUrl>
   </PropertyGroup>
   <ItemGroup>
+	  <FrameworkReference Include="Microsoft.AspNetCore.App" />
 	  <PackageReference Include="FluentValidation" />
 	  <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
 	  <PackageReference Include="MediatR" />
-	  <PackageReference Include="Microsoft.AspNetCore.Http" />
-	  <PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" />
-	  <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Core.CrossCuttingConcerns.Logging.Abstraction\Core.CrossCuttingConcerns.Logging.Abstraction.csproj" />

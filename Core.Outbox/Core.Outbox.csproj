@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -8,19 +8,15 @@
     <PackageId>NetCoreBackend.NArchitecture.$(AssemblyName)</PackageId>
     <Version>1.0.0</Version>
     <Title>NetCoreBackend NArchitecture $(AssemblyName)</Title>
-    <Description>Provides utilities for integrating persistence services with ASP.NET Web API
-      projects.</Description>
+    <Description>Transactional Outbox pattern — atomic DB-write + event publish with retry, poison-pill handling and background dispatch.</Description>
     <Product>NetCoreBackend NArchitecture</Product>
     <Authors>Caner Demirkol, Contributors</Authors>
     <Company></Company>
-       <PackageTags>Clean Architecture, Union Architecture, Core, NArchitecture, Persistence, Data
-      Access, Web API, ASP.NET, Repository Pattern, Unit of Work, Database, ORM, NoSQL, Relational,
-      File System, Migration, Tools</PackageTags>
-    <PackageIcon></PackageIcon>
-    <RepositoryUrl></RepositoryUrl>
+    <PackageTags>Outbox, Distributed Events, EF Core, Reliability, NArchitecture</PackageTags>
   </PropertyGroup>
   <ItemGroup>
-    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Core.Persistence\Core.Persistence.csproj" />

@@ -1,24 +1,23 @@
-﻿using NetCoreBackend.NArchitecture.Core.ElasticSearch.Models;
-using Nest;
+using NetCoreBackend.NArchitecture.Core.ElasticSearch.Models;
 
 namespace NetCoreBackend.NArchitecture.Core.ElasticSearch;
 
 public interface IElasticSearch
 {
-    Task<IElasticSearchResult> CreateNewIndexAsync(IndexModel indexModel);
-    Task<IElasticSearchResult> InsertAsync(ElasticSearchInsertUpdateModel model);
-    Task<IElasticSearchResult> InsertManyAsync(string indexName, object[] items);
-    IReadOnlyDictionary<IndexName, IndexState> GetIndexList();
+    Task<IElasticSearchResult> CreateNewIndexAsync(IndexModel indexModel, CancellationToken cancellationToken = default);
+    Task<IElasticSearchResult> InsertAsync(ElasticSearchInsertUpdateModel model, CancellationToken cancellationToken = default);
+    Task<IElasticSearchResult> InsertManyAsync(string indexName, object[] items, CancellationToken cancellationToken = default);
+    Task<IReadOnlyCollection<IndexInfo>> GetIndexListAsync(CancellationToken cancellationToken = default);
 
-    Task<List<ElasticSearchGetModel<T>>> GetAllSearch<T>(SearchParameters parameters)
+    Task<List<ElasticSearchGetModel<T>>> GetAllSearch<T>(SearchParameters parameters, CancellationToken cancellationToken = default)
         where T : class;
 
-    Task<List<ElasticSearchGetModel<T>>> GetSearchByField<T>(SearchByFieldParameters fieldParameters)
+    Task<List<ElasticSearchGetModel<T>>> GetSearchByField<T>(SearchByFieldParameters fieldParameters, CancellationToken cancellationToken = default)
         where T : class;
 
-    Task<List<ElasticSearchGetModel<T>>> GetSearchBySimpleQueryString<T>(SearchByQueryParameters queryParameters)
+    Task<List<ElasticSearchGetModel<T>>> GetSearchBySimpleQueryString<T>(SearchByQueryParameters queryParameters, CancellationToken cancellationToken = default)
         where T : class;
 
-    Task<IElasticSearchResult> UpdateByElasticIdAsync(ElasticSearchInsertUpdateModel model);
-    Task<IElasticSearchResult> DeleteByElasticIdAsync(ElasticSearchModel model);
+    Task<IElasticSearchResult> UpdateByElasticIdAsync(ElasticSearchInsertUpdateModel model, CancellationToken cancellationToken = default);
+    Task<IElasticSearchResult> DeleteByElasticIdAsync(ElasticSearchModel model, CancellationToken cancellationToken = default);
 }

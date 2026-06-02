@@ -32,7 +32,9 @@ public class GetProductsQuery : IRequest<GetListResponse<ProductDto>>,
     ITenantValidationRequest
 {
     public string[] Roles => ["Manager", "Admin"];
-    public string CacheKey => "Products";
+    // CacheKey query handler içinde benzersiz olmalı — bare "Products" değil,
+    // sorgu+parametre kimliğini yansıtan bir değer kullan (örn. "Products:GetAll").
+    public string CacheKey => "Products:GetAll";
     public string? CacheGroupKey => "Products";
     public bool BypassCache => false;
     public TimeSpan? SlidingExpiration => null;

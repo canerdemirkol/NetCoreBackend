@@ -8,7 +8,7 @@ Email gönderme soyutlaması ve veri modelleri.
 public interface IMailService
 {
     void SendMail(Mail mail);
-    Task SendEmailAsync(Mail mail);
+    Task SendEmailAsync(Mail mail, CancellationToken cancellationToken = default);
 }
 ```
 
@@ -40,6 +40,7 @@ Mail mail = new()
     "UserName": "smtp-user",
     "Password": "smtp-password",
     "AuthenticationRequired": true,
+    "TlsMode": "StartTlsWhenAvailable",
     "DkimPrivateKey": "",
     "DkimSelector": "",
     "DomainName": "myapp.com"
@@ -47,7 +48,19 @@ Mail mail = new()
 }
 ```
 
-> SSL/TLS, MailKit'in default `SecureSocketOptions.Auto` davranışıyla port'a göre otomatik belirlenir (port 465 → SSL, 587 → STARTTLS). Açık konfigürasyon istersen `MailKitMailService.emailPrepare` içinde `smtp.Connect(server, port, SecureSocketOptions.X)` çağrısını override et.
+### TLS Mode
+
+`MailSettings.TlsMode` (enum `MailTlsMode`) MailKit'in `SecureSocketOptions` değerine map edilir:
+
+| Mode | SMTP davranışı | Tipik port |
+|---|---|---|
+| `None` | TLS yok (plaintext) | 25 (sadece dev) |
+| `Auto` | MailKit port'a bakar | — |
+| `SslOnConnect` | Bağlantıdan itibaren TLS | 465 |
+| `StartTls` | STARTTLS zorunlu | 587 |
+| `StartTlsWhenAvailable` (default) | STARTTLS varsa kullan | 587 / 25 |
+
+Default `StartTlsWhenAvailable` çoğu modern SMTP sağlayıcı için doğrudur. Port 465 (legacy implicit-TLS) kullanıyorsan `SslOnConnect` set etmelisin.
 
 ## Implementasyon
 

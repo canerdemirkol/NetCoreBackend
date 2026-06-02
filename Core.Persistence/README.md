@@ -12,11 +12,19 @@ Entity<TId>                    ← Id, CreatedDate, UpdatedDate, DeletedDate
 ## Repository Pattern
 
 ```csharp
-// Temel repository
-public class ProductRepository : EfRepositoryBase<Product, Guid, AppDbContext>
+// Tenant-aware entity için: tenantSetter ZORUNLU.
+// AddMultiTenancy() çağrılmamışsa ITenantEntity Add'inde hard error fırlar.
+public class OrderRepository : EfRepositoryBase<Order, Guid, AppDbContext>
 {
-    public ProductRepository(AppDbContext context, ITenantEntitySetter? tenantSetter = null)
+    public OrderRepository(AppDbContext context, ITenantEntitySetter tenantSetter)
         : base(context, tenantSetter) { }
+}
+
+// Tenant-bağımsız entity için (Country gibi): tenantSetter null geçilebilir.
+public class CountryRepository : EfRepositoryBase<Country, int, AppDbContext>
+{
+    public CountryRepository(AppDbContext context)
+        : base(context, tenantSetter: null) { }
 }
 
 // Async interface
@@ -30,11 +38,26 @@ IRepository<Product, Guid>
 
 | Özellik | Açıklama |
 |---|---|
-| **Soft Delete** | `DeletedDate` set edilerek soft silinir. Global query filter ile filtrelenir. |
-| **Sayfalama** | `ToPaginateAsync(index, size)` — `IPaginate<T>` döner |
-| **Dinamik Filtreleme** | `GetListByDynamicAsync(DynamicQuery)` — field, operator, value, logic desteği |
-| **Tenant Otomatik Set** | `Add`/`AddRange`'de `ITenantEntity` ise `TenantId` otomatik set edilir |
+| **Soft Delete** | `DeletedDate` set edilerek soft silinir. Global query filter ile filtrelenir. Cascade soft-delete tenant-aware (başka tenant'ın row'una dokunulmaz). |
+| **Sayfalama** | `ToPaginateAsync(index, size, from)` — `IPaginate<T>` döner. `size <= 0` veya `from > index` `ArgumentOutOfRangeException` fırlatır. |
+| **Dinamik Filtreleme** | `GetListByDynamicAsync(DynamicQuery)` — field, operator, value, logic desteği. `[NotFilterable]` ile işaretli property'ler reddedilir. |
+| **Tenant Otomatik Set** | `Add`/`AddRange`'de `ITenantEntity` ise `TenantId` otomatik set edilir; `ITenantEntitySetter` register edilmemişse hard error. |
 | **SQL Komutları** | `ExecuteSqlRawAsync`, `ExecuteStoredProcedureAsync`, `ExecuteSqlCommand<TResult>` |
+
+## NotFilterable — Hassas property'leri whitelist'ten çıkar
+
+Dinamik query'de kullanıcı-sağlı `field` ismi `typeof(TEntity)` üzerinde public property arar. Hassas alanlara (parola hash'i, internal audit field) erişimi blocklamak için `[NotFilterable]` attribute'unu kullan:
+
+```csharp
+public class User : TenantEntity<Guid>
+{
+    public string Email { get; set; }
+    [NotFilterable] public byte[] PasswordHash { get; set; }
+    [NotFilterable] public byte[] PasswordSalt { get; set; }
+}
+```
+
+`User` ve `PlatformAdmin` framework içinde halihazırda işaretlidir.
 
 ## Tenant Entity Oluşturma
 

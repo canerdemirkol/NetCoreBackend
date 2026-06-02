@@ -12,7 +12,7 @@ Entity hiyerarşisi tenant izolasyonunu yansıtır:
 | `RefreshToken<TId, TUserId>` | `TenantEntity` | Tenant bazlı token yönetimi. Tenant silinince tüm token'lar tek sorguda iptal edilir. |
 | `UserOperationClaim<TId, TUserId, TOperationClaimId>` | `TenantEntity` | Tenant bazlı kullanıcı–izin eşleşmesi. |
 | `EmailAuthenticator<TId>` | `TenantEntity` | Email doğrulama kodu. `TId` PK tipi (User'ın ID tipiyle aynı olması beklenir). |
-| `OtpAuthenticator<TId>` | `TenantEntity` | TOTP tabanlı 2FA. `SecretKey` ham — production'da column encryption önerilir. |
+| `OtpAuthenticator<TId>` | `TenantEntity` | TOTP tabanlı 2FA. `SecretKey` ham byte[] — production'da `AesGcmEncryptionHelper` ile encrypt'lenip öyle saklanmalı (aşağı bkz.). |
 | `OperationClaim<TId>` | `Entity` | İzin / rol kaydı. Platform genelinde ortaktır, tenant'a özgü değildir. |
 
 `TenantEntity` olan entity'lerin tablosunda `TenantId` sütunu fiziksel olarak bulunur. EF Core global query filter tüm SELECT sorgularına otomatik `WHERE TenantId = @currentTenantId` ekler.
@@ -164,3 +164,129 @@ Email  → Email OTP
 Otp    → Google Authenticator / TOTP
 Sms    → SMS (genişletilebilir)
 ```
+
+## At-Rest Encryption — `AesGcmEncryptionHelper`
+
+Hash'lenemeyen ama saklanması/geri okunması gereken sensitive payload'lar için. Tipik kullanım: TOTP secret key, OAuth refresh token'ları, 3rd-party API key'leri, recovery code'lar.
+
+**Algoritma:** AES-256-GCM (authenticated encryption). Blob layout: `[12-byte nonce][16-byte tag][ciphertext]`. Byte oynatılmış blob `AuthenticationTagMismatchException` ile reddedilir.
+
+### Kurulum
+
+```csharp
+// Program.cs — master key SECRET STORE'dan gelmeli (KeyVault, AWS Secrets Manager, vb.)
+byte[] masterKey = Convert.FromBase64String(
+    builder.Configuration["EncryptionMasterKey"]
+    ?? throw new InvalidOperationException("EncryptionMasterKey eksik."));
+builder.Services.AddSingleton(new EncryptionMasterKey(masterKey));
+```
+
+`EncryptionMasterKey(byte[])` ctor 32-byte uzunluk doğrulamasını yapar; daha kısa key `ArgumentException` ile reddedilir.
+
+### TOTP secret encryption örneği
+
+```csharp
+public sealed class OtpEnrollmentHandler
+{
+    private readonly EncryptionMasterKey _key;
+    private readonly IOtpAuthenticatorHelper _otp;
+    private readonly IRepository<OtpAuthenticator<Guid>, Guid> _repo;
+
+    public async Task EnrollAsync(Guid userId, CancellationToken ct)
+    {
+        byte[] plainSecret = await _otp.GenerateSecretKey();
+
+        // associatedData ile user binding: bir DB row'unu başka user'a kopyalamak
+        // decrypt'i fail ettirir.
+        byte[] encryptedSecret = AesGcmEncryptionHelper.Encrypt(
+            plaintext: plainSecret,
+            key: _key.Value,
+            associatedData: Encoding.UTF8.GetBytes($"otp:{userId}"));
+
+        await _repo.AddAsync(new OtpAuthenticator<Guid>
+        {
+            UserId    = userId,
+            SecretKey = encryptedSecret    // DB'de ŞİFRELİ durur
+        });
+    }
+
+    public async Task<bool> VerifyAsync(Guid userId, string submittedCode)
+    {
+        OtpAuthenticator<Guid>? stored = await _repo.GetAsync(o => o.UserId == userId);
+        if (stored is null) return false;
+
+        byte[] plainSecret = AesGcmEncryptionHelper.Decrypt(
+            blob: stored.SecretKey,
+            key: _key.Value,
+            associatedData: Encoding.UTF8.GetBytes($"otp:{userId}"));
+
+        return await _otp.VerifyCode(plainSecret, submittedCode);
+    }
+}
+```
+
+### Master key rotation
+
+Blob'a kendi versiyon byte'ını prefix'le (`[0x01][nonce][tag][ciphertext]`), decrypt sırasında prefix'e göre key seç. Migration: eski key ile decrypt → yeni key ile re-encrypt, batched job.
+
+> Production setup (secret manager seçenekleri + appsettings örneği): [SETUP.md § 12](../SETUP.md#12-outbox--rabbitmq-configuration).
+
+---
+
+## RefreshToken — Rotation & Theft Detection
+
+`RefreshToken<TId, TUserId>` artık computed flag'lerle gelir:
+
+```csharp
+token.IsExpired   // DateTime.UtcNow >= ExpirationDate
+token.IsRevoked   // RevokedDate.HasValue
+token.IsActive    // !IsRevoked && !IsExpired
+```
+
+`ExpirationDate` her zaman **UTC** olarak yorumlanır.
+
+### Rotation pattern
+
+Her refresh handle'ında eski token revoke edilir + yeni token verilir; ikisi `ReplacedByToken` ile zincirlenir.
+
+```csharp
+public sealed class RefreshAccessTokenHandler
+{
+    public async Task<AccessToken> Handle(RefreshCommand cmd, CancellationToken ct)
+    {
+        RefreshToken<Guid, Guid>? presented =
+            await _tokenRepo.GetAsync(t => t.Token == cmd.RefreshToken);
+
+        if (presented is null)
+            throw new AuthorizationException("Unknown refresh token.");
+
+        // REUSE DETECTION — presented token zaten revoke edilmişse, biri replay yapıyor.
+        // Tüm family'yi (aynı user'ın aktif refresh token'larını) iptal et.
+        if (presented.IsRevoked)
+        {
+            IList<RefreshToken<Guid, Guid>> family =
+                await _tokenRepo.GetListAsync(t => t.UserId == presented.UserId);
+
+            RefreshTokenRotation.DetectReuseAndRevokeFamily(presented, family, cmd.CallerIp);
+            await _tokenRepo.UpdateRangeAsync(family);
+
+            throw new AuthorizationException("Refresh token reuse detected — re-login required.");
+        }
+
+        if (!presented.IsActive)
+            throw new AuthorizationException("Refresh token expired.");
+
+        // Normal rotation
+        AccessToken accessToken = _jwt.CreateToken(user, claims);
+        RefreshToken<Guid, Guid> replacement = _jwt.CreateRefreshToken(user, cmd.CallerIp);
+
+        RefreshTokenRotation.Rotate(presented, replacement, cmd.CallerIp);
+        await _tokenRepo.UpdateAsync(presented);
+        await _tokenRepo.AddAsync(replacement);
+
+        return accessToken;
+    }
+}
+```
+
+**Why this matters:** çalınan refresh token'la attacker rotate ederse — legitimate user bir sonraki refresh'inde "already revoked" durumuyla karşılaşır → family revoke tetiklenir → her iki taraf da re-login'e zorlanır. Token sızıntısı kalıcı erişime dönüşmez.
