@@ -412,3 +412,6 @@ FodyWeavers.xsd
 **/wwwroot/AssistanceProgramRequiredDoc/
 
 !**/wwwroot/AssistanceProgramRequiredDoc/.gitkeep
+
+# NuGet pack output — publish-all.ps1 buraya .nupkg + .snupkg yazar
+nupkgs/

@@ -110,6 +110,10 @@ See [AUTH.md](./AUTH.md) for the single-endpoint authentication system (server d
 > **Tam kurulum rehberi:** [**SETUP.md**](./SETUP.md) — `appsettings.json`, `Program.cs`,
 > `DbContext`, `ITenantService`, pipeline behavior'lar ve middleware sırası dahil. Aşağıdaki
 > bölüm hızlı bir özet.
+>
+> **Bu paketleri NuGet'e yayımlamak için:** [**NUGET-PUBLISH.md**](./NUGET-PUBLISH.md) —
+> API key, `publish-all.ps1` script'i, lokal feed ile test, versiyon yönetimi,
+> troubleshooting.
 
 ### 1. Install (via project reference or NuGet)
 ```xml

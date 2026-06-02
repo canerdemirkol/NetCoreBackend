@@ -1,0 +1,55 @@
+<Project>
+
+  <!--
+    Ortak metadata + NuGet packaging davranışı. Her csproj kendi PackageId/Description/Title'ını
+    tutmaya devam eder; burada tekrarlanmayacak şeyleri (lisans, author, README pack,
+    symbols, deterministic build) topluyoruz.
+
+    Tek bir projeyi paket-dışı tutmak için (örn. Core.Test):
+        <IsPackable>false</IsPackable>
+    o csproj içine eklenir.
+  -->
+
+  <PropertyGroup>
+    <!-- Solution-wide bilgiler -->
+    <Authors>Caner Demirkol, Contributors</Authors>
+    <Company></Company>
+    <Copyright>© $([System.DateTime]::Now.Year) Caner Demirkol</Copyright>
+    <Product>NetCoreBackend NArchitecture</Product>
+
+    <!-- Lisans: SPDX expression NuGet.org sayfasında "MIT" badge'i gösterir -->
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+
+    <!-- Repository URL'leri henüz public repo olmadığı için boş — public'e taşıyınca buraya gelir -->
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl></RepositoryUrl>
+    <PackageProjectUrl></PackageProjectUrl>
+
+    <!-- Her library kendi klasöründeki README.md'sini NuGet sayfasında gösterir -->
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+
+    <!-- Symbol package: debug-step-into için tüketici için kolaylık (.snupkg ayrı dosya) -->
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+
+    <!-- Deterministic build: aynı kaynak → aynı binary; SourceLink'le birleşince
+         tüketici symbols ile orijinal kaynağa step-in yapabilir -->
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+
+    <!-- Pack zamanı uyarıları:
+         NU5100 = bin/ içinde test-runner DLL'i (Core.Test'i IsPackable=false yapıyoruz, sorun değil)
+         NU5128 = readme dosyası referans ama project'e include edilmemiş (Directory.Build.props zaten ekliyor) -->
+    <NoWarn>$(NoWarn);NU5100</NoWarn>
+  </PropertyGroup>
+
+  <!--
+    Her csproj kendi klasöründeki README.md'yi paket köküne kopyalar. PackageReadmeFile=README.md
+    deklarasyonu yukarıda; bu ItemGroup dosyayı paket fiziksel içeriğine ekler.
+    Condition: README.md yoksa hata vermesin (Core.Test gibi paketlenmeyenler için zararsız).
+  -->
+  <ItemGroup Condition="Exists('$(MSBuildProjectDirectory)\README.md')">
+    <None Include="$(MSBuildProjectDirectory)\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>
