@@ -65,7 +65,13 @@ public static class MockRepositoryHelper
                     if (expression != null)
                         query = query.Where(expression.Compile());
 
-                    Paginate<TEntity> paginateList = new() { Items = query.ToList() };
+                    // Use the ctor that computes paging metadata (Count/Pages/HasNext) — the
+                    // parameterless `new()` left them at zero, so tests asserting on paging
+                    // state would see HasNext=false regardless of how much data exists.
+                    List<TEntity> filtered = query.ToList();
+                    Paginate<TEntity> paginateList = size > 0
+                        ? new Paginate<TEntity>(filtered, index, size, from: 0)
+                        : new Paginate<TEntity> { Items = filtered };
                     return paginateList;
                 }
             );

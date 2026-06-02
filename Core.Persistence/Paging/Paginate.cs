@@ -4,6 +4,10 @@ public class Paginate<T> : IPaginate<T>
 {
     public Paginate(IEnumerable<T> source, int index, int size, int from)
     {
+        if (size <= 0)
+            throw new ArgumentOutOfRangeException(nameof(size), size, "Page size must be greater than zero.");
+        if (index < from)
+            throw new ArgumentOutOfRangeException(nameof(index), index, $"Page index must be >= from ({from}).");
         if (from > index)
             throw new ArgumentException($"indexFrom: {from} > pageIndex: {index}, must indexFrom <= pageIndex");
 
@@ -53,6 +57,8 @@ public class Paginate<TSource, TResult> : IPaginate<TResult>
         int from
     )
     {
+        if (size <= 0)
+            throw new ArgumentOutOfRangeException(nameof(size), size, "Page size must be greater than zero.");
         if (from > index)
             throw new ArgumentException($"From: {from} > Index: {index}, must From <= Index");
 
