@@ -415,3 +415,7 @@ FodyWeavers.xsd
 
 # NuGet pack output — publish-all.ps1 buraya .nupkg + .snupkg yazar
 nupkgs/
+
+# Claude 
+.claude/*
+Claude.md
