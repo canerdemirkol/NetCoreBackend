@@ -7,15 +7,17 @@ Günlük rolling file sink'leri ile dosya tabanlı Serilog logger implementasyon
 - Günlük log rotasyonu (daily rolling)
 - 50 MB dosya boyutu sınırı
 - Genel log dosyası (`AllLogs.txt`)
-- Servis bazlı ayrı klasörler (`Logs/UserService/...`)
+- Servis bazlı ayrı klasörler (`SpecificLogFolders`)
 - HTTP request log dosyası (`HttpLog.txt`)
+- `LogContext` enrichment desteği — `{CorrelationId}` gibi ambient property'ler otomatik log satırlarına eklenir
 
 ## Kurulum
 
 ```csharp
-// DI kaydı için Core.CrossCuttingConcerns.Logging.DependencyInjection kullanın
+// Program.cs
 builder.Services.AddSingleton<ILogger, SerilogFileLogger>(sp =>
-    new SerilogFileLogger(config.GetSection("FileLogConfiguration").Get<FileLogConfiguration>()!));
+    new SerilogFileLogger(
+        builder.Configuration.GetSection("FileLogConfiguration").Get<FileLogConfiguration>()!));
 ```
 
 ## appsettings.json
@@ -24,24 +26,30 @@ builder.Services.AddSingleton<ILogger, SerilogFileLogger>(sp =>
 {
   "FileLogConfiguration": {
     "FolderPath": "Logs",
-    "MinimumLogEventLevel": "Information",
-    "OutputTemplate": "[{Timestamp:yyyy-MM-dd HH:mm:ss}] [{Level:u3}] {Message:lj}{NewLine}{Exception}",
-    "SpecificFolderPaths": {
-      "UserService": "Logs/UserService",
-      "OrderService": "Logs/OrderService"
-    }
+    "MinLogLevel": "Information",
+    "LogOutputTemplate": "[{Timestamp:dd.MM.yyyy HH:mm:ss}] [{Level:u3}] [{CorrelationId}] {Message:lj}{NewLine}{Exception}",
+    "SpecificLogFolders": ["UserService", "OrderService"]
   }
 }
 ```
+
+> `{CorrelationId}` çalışması için `Core.CrossCuttingConcerns.CorrelationId.WebApi` paketinin `app.UseCorrelationId()` ile pipeline'a eklenmiş olması gerekir.
 
 ## Oluşturulan Dosyalar
 
 ```
 Logs/
-├── AllLogs-2026-06-01.txt
-├── HttpLog-2026-06-01.txt
+├── GeneralLogs/
+│   └── AllLogs.txt
+├── HttpLogs/
+│   └── HttpLog.txt
 ├── UserService/
-│   └── UserService-2026-06-01.txt
+│   └── UserService.txt
 └── OrderService/
-    └── OrderService-2026-06-01.txt
+    └── OrderService.txt
 ```
+
+## Değişiklik Geçmişi
+
+### 1.0.1
+- `Enrich.FromLogContext()` eklendi — `LogContext.PushProperty` ile set edilen property'ler artık log satırlarına yansır

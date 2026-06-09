@@ -46,7 +46,8 @@ public class SerilogFileLogger : SerilogLoggerServiceBase
             : "[{Timestamp:dd.MM.yyyy HH:mm:ss}] [{Level:u3}] {Message:lj}{NewLine}{Exception}";
 
         var loggerConfig = new LoggerConfiguration()
-            .MinimumLevel.Is(minLogLevel);
+            .MinimumLevel.Is(minLogLevel)
+            .Enrich.FromLogContext();
 
         // 1. General logs - SpecificLogFolders'a ait loglar hariç tüm loglar
         string generalLogPath = Path.Combine(

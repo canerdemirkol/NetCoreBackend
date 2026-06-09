@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+	<TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>NetCoreBackend.NArchitecture.$(AssemblyName)</RootNamespace>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <PackageId>NetCoreBackend.NArchitecture.$(AssemblyName)</PackageId>
+    <Version>1.0.0</Version>
+    <Title>NetCoreBackend NArchitecture $(AssemblyName)</Title>
+    <Description>Provide ASP.NET Core middleware and extensions for correlation ID propagation,
+      response header injection, and Serilog log enrichment.</Description>
+    <Product>NetCoreBackend NArchitecture</Product>
+    <Authors>Caner Demirkol, Contributors</Authors>
+    <Company></Company>
+    <PackageTags>Clean Architecture, Union Architecture, Core, NArchitecture, Web API, Cross
+      Cutting Concerns, Correlation ID, Observability, Serilog</PackageTags>
+    <PackageIcon></PackageIcon>
+    <RepositoryUrl></RepositoryUrl>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Serilog" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Core.CrossCuttingConcerns.CorrelationId\Core.CrossCuttingConcerns.CorrelationId.csproj" />
+  </ItemGroup>
+</Project>
