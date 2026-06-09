@@ -20,7 +20,6 @@ SaaS uygulamaları için multi-tenant altyapısı. Tenant tespitini JWT claim, H
 | `ITenantService` | Uygulamada implement edilmesi gereken tenant lookup interface'i |
 | `TenantEntitySetter` | `ITenantEntitySetter` implementasyonu — Add işlemlerinde TenantId'yi otomatik set eder |
 | `TenantMiddleware` | Her request'te tenant'ı çözen middleware. JWT'de tenant_id varken tenant DB'de yoksa 401 döner. |
-| `ModelBuilderTenantExtensions` | `builder.ApplyTenantFilters(_tenantContext)` — DbContext.OnModelCreating'de tek satırla EF Core global filter kurar |
 | `TenantClaimTypes` | Claim key sabitleri (tenant_id, is_super_admin, is_impersonating) |
 
 ## Kurulum

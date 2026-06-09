@@ -38,7 +38,6 @@ Core.MultiTenancy/
 ├── Context/
 │   └── TenantContext.cs           ← Scoped, mutable implementation of ITenantContext
 ├── Extensions/
-│   └── ModelBuilderTenantExtensions.cs  ← builder.ApplyTenantFilters(_tenantContext) helper
 ├── Middleware/
 │   └── TenantMiddleware.cs        ← Resolves tenant per-request (JWT → Header → Subdomain)
 ├── Constants/
@@ -108,11 +107,9 @@ Platform'un ortak verisi → Entity   (Countries, Currencies, OperationClaims, T
 
 ## EF Core Global Query Filter Setup
 
-In your application's `DbContext`, call `ApplyTenantFilters` — one line replaces the entire expression-tree boilerplate:
+In your application's `DbContext`, write a per-entity closure in `OnModelCreating`. EF Core re-evaluates the closure on every query because `_tenantContext` is captured via the scoped `DbContext` instance:
 
 ```csharp
-using NetCoreBackend.NArchitecture.Core.MultiTenancy.Extensions;
-
 public class AppDbContext : DbContext
 {
     private readonly ITenantContext _tenantContext;
@@ -124,16 +121,24 @@ public class AppDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
-        builder.ApplyTenantFilters(_tenantContext);
+        builder.Entity<Product>().HasQueryFilter(e =>
+            (_tenantContext.IsSuperAdmin || e.TenantId == _tenantContext.TenantId)
+            && e.DeletedDate == null);
+
         base.OnModelCreating(builder);
     }
 }
 ```
 
-`ApplyTenantFilters` iterates every `ITenantEntity` type and registers a global query filter:
-- **SuperAdmin** → no filter applied (sees all tenants)
-- **Tenant user** → `WHERE TenantId = @currentTenantId`
-- **No tenant context** (public endpoints, health checks) → filter evaluates to `false`, empty set returned — no exception thrown
+Filter behavior:
+- **SuperAdmin** → no tenant restriction (sees all tenants), soft-delete still applied
+- **Tenant user** → `WHERE TenantId = @currentTenantId AND DeletedDate IS NULL`
+- **No tenant context** (public endpoints, health checks) → `TenantId == null` evaluates to `false`, empty set returned
+
+> **Why not a generic extension method?** `Expression.Constant(tenantContext)` captures a single
+> `ITenantContext` instance at model-build time. EF Core caches the compiled query, so all subsequent
+> requests would evaluate against the first request's tenant — a critical security flaw. The closure
+> approach works because EF Core recognizes the `DbContext`-captured reference and re-reads it per query.
 
 ---
 
