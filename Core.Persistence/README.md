@@ -38,7 +38,7 @@ IRepository<Product, Guid>
 
 | Özellik | Açıklama |
 |---|---|
-| **Soft Delete** | `DeletedDate` set edilerek soft silinir. Global query filter ile filtrelenir. Cascade soft-delete tenant-aware (başka tenant'ın row'una dokunulmaz). |
+| **Soft Delete** | `DeletedDate` set edilerek soft silinir. Global query filter ile filtrelenir. Cascade soft-delete tenant-aware (başka tenant'ın row'una dokunulmaz). `withDeleted: true` silinmiş kayıtları getirir ancak tenant izolasyonunu korur — başka tenant'ın verisi görünmez. |
 | **Sayfalama** | `ToPaginateAsync(index, size, from)` — `IPaginate<T>` döner. `size <= 0` veya `from > index` `ArgumentOutOfRangeException` fırlatır. |
 | **Dinamik Filtreleme** | `GetListByDynamicAsync(DynamicQuery)` — field, operator, value, logic desteği. `[NotFilterable]` ile işaretli property'ler reddedilir. |
 | **Tenant Otomatik Set** | `Add`/`AddRange`'de `ITenantEntity` ise `TenantId` otomatik set edilir; `ITenantEntitySetter` register edilmemişse hard error. |

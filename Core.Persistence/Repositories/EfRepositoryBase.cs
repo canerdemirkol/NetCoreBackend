@@ -94,6 +94,20 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
         return await Query().Where(predicate).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    // Removes the soft-delete filter while keeping tenant isolation intact.
+    // IgnoreQueryFilters() strips ALL global filters including the tenant filter, so after
+    // calling it we manually re-apply the tenant predicate for non-SuperAdmin callers.
+    private IQueryable<TEntity> ApplyIncludeDeleted(IQueryable<TEntity> queryable)
+    {
+        queryable = queryable.IgnoreQueryFilters();
+        if (typeof(ITenantEntity).IsAssignableFrom(typeof(TEntity))
+            && TenantSetter is { IsSuperAdmin: false, CurrentTenantId: { } tenantId })
+        {
+            queryable = queryable.Where(e => ((ITenantEntity)e).TenantId == tenantId);
+        }
+        return queryable;
+    }
+
     // Throws if the entity is tenant-aware but no tenant context is present (and caller is not SuperAdmin).
     // Prevents accidental cross-tenant data mutations via raw SQL.
     private void GuardTenantContext()
@@ -252,7 +266,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
         if (include != null)
             queryable = include(queryable);
         if (withDeleted)
-            queryable = queryable.IgnoreQueryFilters();
+            queryable = ApplyIncludeDeleted(queryable);
         if (predicate != null)
             queryable = queryable.Where(predicate);
         if (orderBy != null)
@@ -274,7 +288,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
         if (include != null)
             queryable = include(queryable);
         if (withDeleted)
-            queryable = queryable.IgnoreQueryFilters();
+            queryable = ApplyIncludeDeleted(queryable);
         return await queryable.FirstOrDefaultAsync(predicate, cancellationToken);
     }
 
@@ -295,7 +309,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
         if (include != null)
             queryable = include(queryable);
         if (withDeleted)
-            queryable = queryable.IgnoreQueryFilters();
+            queryable = ApplyIncludeDeleted(queryable);
         if (predicate != null)
             queryable = queryable.Where(predicate);
         return await queryable.ToPaginateAsync(index, size, from: 0, cancellationToken);
@@ -312,7 +326,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
         if (include != null)
             queryable = include(queryable);
         if (withDeleted)
-            queryable = queryable.IgnoreQueryFilters();
+            queryable = ApplyIncludeDeleted(queryable);
         if (predicate != null)
             queryable = queryable.Where(predicate);
         return await queryable.AnyAsync(cancellationToken);
@@ -390,7 +404,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
         if (include != null)
             queryable = include(queryable);
         if (withDeleted)
-            queryable = queryable.IgnoreQueryFilters();
+            queryable = ApplyIncludeDeleted(queryable);
         return queryable.FirstOrDefault(predicate);
     }
 
@@ -410,7 +424,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
         if (include != null)
             queryable = include(queryable);
         if (withDeleted)
-            queryable = queryable.IgnoreQueryFilters();
+            queryable = ApplyIncludeDeleted(queryable);
         if (predicate != null)
             queryable = queryable.Where(predicate);
         if (orderBy != null)
@@ -434,7 +448,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
         if (include != null)
             queryable = include(queryable);
         if (withDeleted)
-            queryable = queryable.IgnoreQueryFilters();
+            queryable = ApplyIncludeDeleted(queryable);
         if (predicate != null)
             queryable = queryable.Where(predicate);
         return queryable.ToPaginate(index, size, from: 0);
@@ -450,7 +464,7 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
         if (include != null)
             queryable = include(queryable);
         if (withDeleted)
-            queryable = queryable.IgnoreQueryFilters();
+            queryable = ApplyIncludeDeleted(queryable);
         if (predicate != null)
             queryable = queryable.Where(predicate);
         return queryable.Any();

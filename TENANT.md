@@ -22,6 +22,8 @@ Every HTTP request goes through `TenantMiddleware`, which resolves the current t
 
 If none of these resolves a tenant, the request continues without a tenant context (suitable for public endpoints like health checks).
 
+> **Deleted tenant:** If the JWT contains a `tenant_id` claim but the tenant no longer exists in the database, the middleware returns **401** and stops the request — the token is considered stale. The client must re-authenticate.
+
 ---
 
 ## Component Overview
@@ -35,6 +37,8 @@ Core.MultiTenancy/
 │   └── ITenantService.cs          ← Implement this in your app to look up tenants from DB
 ├── Context/
 │   └── TenantContext.cs           ← Scoped, mutable implementation of ITenantContext
+├── Extensions/
+│   └── ModelBuilderTenantExtensions.cs  ← builder.ApplyTenantFilters(_tenantContext) helper
 ├── Middleware/
 │   └── TenantMiddleware.cs        ← Resolves tenant per-request (JWT → Header → Subdomain)
 ├── Constants/
@@ -104,9 +108,11 @@ Platform'un ortak verisi → Entity   (Countries, Currencies, OperationClaims, T
 
 ## EF Core Global Query Filter Setup
 
-In your application's `DbContext`, add the global filter to all `ITenantEntity` types:
+In your application's `DbContext`, call `ApplyTenantFilters` — one line replaces the entire expression-tree boilerplate:
 
 ```csharp
+using NetCoreBackend.NArchitecture.Core.MultiTenancy.Extensions;
+
 public class AppDbContext : DbContext
 {
     private readonly ITenantContext _tenantContext;
@@ -118,29 +124,16 @@ public class AppDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
-        foreach (var entityType in builder.Model.GetEntityTypes())
-        {
-            if (typeof(ITenantEntity).IsAssignableFrom(entityType.ClrType))
-            {
-                var parameter = Expression.Parameter(entityType.ClrType, "e");
-                var tenantIdProperty = Expression.Property(parameter, nameof(ITenantEntity.TenantId));
-                var tenantContextField = Expression.Constant(_tenantContext);
-                var tenantIdField = Expression.Property(tenantContextField, nameof(ITenantContext.TenantId));
-                var tenantIdValue = Expression.Property(tenantIdField, "Value");
-
-                // SuperAdmin: no filter. Normal user: TenantId == context.TenantId
-                var isSuperAdmin = Expression.Property(tenantContextField, nameof(ITenantContext.IsSuperAdmin));
-                var tenantMatch = Expression.Equal(tenantIdProperty, tenantIdValue);
-                var filter = Expression.OrElse(isSuperAdmin, tenantMatch);
-
-                builder.Entity(entityType.ClrType).HasQueryFilter(Expression.Lambda(filter, parameter));
-            }
-        }
-
+        builder.ApplyTenantFilters(_tenantContext);
         base.OnModelCreating(builder);
     }
 }
 ```
+
+`ApplyTenantFilters` iterates every `ITenantEntity` type and registers a global query filter:
+- **SuperAdmin** → no filter applied (sees all tenants)
+- **Tenant user** → `WHERE TenantId = @currentTenantId`
+- **No tenant context** (public endpoints, health checks) → filter evaluates to `false`, empty set returned — no exception thrown
 
 ---
 

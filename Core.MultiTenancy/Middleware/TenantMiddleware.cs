@@ -58,6 +58,14 @@ public class TenantMiddleware
 
         if (tenant == null)
         {
+            // JWT carried a tenant_id claim but the tenant no longer exists in the DB.
+            // This means the token is stale (tenant was deleted after login). Force re-login.
+            if (!string.IsNullOrEmpty(tenantIdClaim))
+            {
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                await context.Response.WriteAsync("The tenant in your access token no longer exists. Please log in again.");
+                return;
+            }
             await _next(context);
             return;
         }
