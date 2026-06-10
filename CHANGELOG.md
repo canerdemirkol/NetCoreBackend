@@ -9,6 +9,14 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [1.1.1] - 2026-06-10
 
+### Core.Security 1.1.1
+
+#### Added
+
+- **`OperationClaim.Description`** — optional `string?` field describing what the claim grants. Nullable and backward-compatible; existing records without a description remain valid.
+
+---
+
 ### Core.Persistence 1.1.1
 
 #### Fixed
