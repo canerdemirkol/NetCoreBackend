@@ -7,6 +7,19 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.1.1] - 2026-06-10
+
+### Core.Persistence 1.1.1
+
+#### Fixed
+
+- **`ExecuteStoredProcedureAsync` is now provider-agnostic.** Previously hardcoded Oracle `BEGIN {procedure}; END;` syntax. Now detects the active EF Core provider at runtime via `Context.Database.ProviderName` and generates the correct syntax:
+  - SQL Server → `EXEC {procedure}`
+  - PostgreSQL → `CALL {procedure}`
+  - Oracle / other → `BEGIN {procedure}; END;` (unchanged fallback)
+
+---
+
 ## [1.1.0] - 2026-06-10
 
 ### Core.Persistence 1.1.0

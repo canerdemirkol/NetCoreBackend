@@ -60,14 +60,26 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
     // WARNING: Stored procedures bypass EF Core global query filters.
     // The procedure itself must enforce tenant isolation via TenantId parameter.
     // SuperAdmin is exempt.
+    //
+    // Pass the procedure name with positional placeholders for parameters, e.g.:
+    //   "MyProc({0}, {1})"  with  new object[] { value1, value2 }
+    // EF Core maps {0},{1}... to provider-specific parameter markers automatically.
     public async Task<int> ExecuteStoredProcedureAsync(string procedure, object[]? parameters = null)
     {
         GuardTenantContext();
-        string command = $"BEGIN {procedure}; END;";
+        string command = BuildStoredProcedureCommand(procedure);
         return parameters == null
             ? await Context.Database.ExecuteSqlRawAsync(command).ConfigureAwait(false)
             : await Context.Database.ExecuteSqlRawAsync(command, parameters).ConfigureAwait(false);
     }
+
+    private string BuildStoredProcedureCommand(string procedure) =>
+        Context.Database.ProviderName switch
+        {
+            "Microsoft.EntityFrameworkCore.SqlServer" => $"EXEC {procedure}",
+            "Npgsql.EntityFrameworkCore.PostgreSQL"   => $"CALL {procedure}",
+            _                                          => $"BEGIN {procedure}; END;"
+        };
 
     // Tenant-safe bulk update (EF Core 7+ ExecuteUpdate).
     //
