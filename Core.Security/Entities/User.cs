@@ -4,7 +4,7 @@ using NetCoreBackend.NArchitecture.Core.Security.Enums;
 
 namespace NetCoreBackend.NArchitecture.Core.Security.Entities;
 
-public class User<TId> : TenantEntity<TId>
+public class User<TId> : AuditableTenantEntity<TId>
 {
     public string Email { get; set; }
     [NotFilterable] public byte[] PasswordSalt { get; set; }

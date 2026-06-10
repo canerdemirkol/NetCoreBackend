@@ -19,15 +19,18 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
 {
     protected readonly TContext Context;
     protected readonly ITenantEntitySetter? TenantSetter;
+    protected readonly ICurrentUserService? CurrentUserService;
 
     // Convenience accessor for raw SQL methods that bypass EF Core global query filters.
     // Always pass this as a parameter when constructing WHERE TenantId = @tenantId clauses.
     protected Guid? CurrentTenantId => TenantSetter?.CurrentTenantId;
+    protected Guid? CurrentUserId => CurrentUserService?.UserId;
 
-    public EfRepositoryBase(TContext context, ITenantEntitySetter? tenantSetter = null)
+    public EfRepositoryBase(TContext context, ITenantEntitySetter? tenantSetter = null, ICurrentUserService? currentUserService = null)
     {
         Context = context;
         TenantSetter = tenantSetter;
+        CurrentUserService = currentUserService;
     }
 
     public IQueryable<TEntity> Query()
@@ -166,6 +169,8 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
     protected virtual void EditEntityPropertiesToAdd(TEntity entity)
     {
         entity.CreatedDate = DateTime.UtcNow;
+        if (entity is IEntityAudit auditOnAdd)
+            auditOnAdd.CreatedById = CurrentUserId;
         if (entity is ITenantEntity tenantEntity)
         {
             // Fail-fast: without TenantSetter the row would be written with TenantId == default and
@@ -201,6 +206,8 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
     protected virtual void EditEntityPropertiesToUpdate(TEntity entity)
     {
         entity.UpdatedDate = DateTime.UtcNow;
+        if (entity is IEntityAudit auditOnUpdate)
+            auditOnUpdate.UpdatedById = CurrentUserId;
     }
 
     public async Task<TEntity> UpdateAsync(TEntity entity, CancellationToken cancellationToken = default)
@@ -545,11 +552,15 @@ public class EfRepositoryBase<TEntity, TEntityId, TContext>
     protected virtual void EditEntityPropertiesToDelete(TEntity entity)
     {
         entity.DeletedDate = DateTime.UtcNow;
+        if (entity is IEntityAudit auditOnDelete)
+            auditOnDelete.DeletedById = CurrentUserId;
     }
 
     protected virtual void EditRelationEntityPropertiesToCascadeSoftDelete(IEntityTimestamps entity)
     {
         entity.DeletedDate = DateTime.UtcNow;
+        if (entity is IEntityAudit auditEntity)
+            auditEntity.DeletedById = CurrentUserId;
     }
 
     protected virtual bool IsSoftDeleted(IEntityTimestamps entity)

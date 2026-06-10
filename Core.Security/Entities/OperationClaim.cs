@@ -2,7 +2,7 @@
 
 namespace NetCoreBackend.NArchitecture.Core.Security.Entities;
 
-public class OperationClaim<TId> : Entity<TId>
+public class OperationClaim<TId> : AuditableEntity<TId>
 {
     public string Name { get; set; }
 

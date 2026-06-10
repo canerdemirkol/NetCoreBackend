@@ -7,7 +7,7 @@ namespace NetCoreBackend.NArchitecture.Core.Security.Entities;
 // Stored in a separate table from tenant User records.
 // Use Entity<TId> (not TenantEntity) so no TenantId column is created
 // and EF Core global query filters never apply to this table.
-public class PlatformAdmin<TId> : Entity<TId>
+public class PlatformAdmin<TId> : AuditableEntity<TId>
 {
     public string Email { get; set; }
     [NotFilterable] public byte[] PasswordSalt { get; set; }
