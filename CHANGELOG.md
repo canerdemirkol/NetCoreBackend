@@ -7,6 +7,49 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [2.0.0] - 2026-06-11
+
+### Core.Security 2.0.0
+
+#### Breaking Changes
+
+- **`PlatformAdmin<TId>` base class changed from `AuditableEntity<TId>` → `Entity<TId>`.**
+
+  Platform admins are not application users — there is no meaningful "who created this admin" in the same way as tenant-user audit. Audit columns (`CreatedAt`, `UpdatedAt`, `CreatedById`, `UpdatedById`, `DeletedById`) are removed from the `PlatformAdmins` table.
+
+  **Migration guide:**
+
+  ```bash
+  dotnet ef migrations add RemovePlatformAdminAuditColumns
+  dotnet ef database update
+  ```
+
+  The migration will drop `CreatedAt`, `UpdatedAt`, `CreatedById`, `UpdatedById`, `DeletedById` from the `PlatformAdmins` table. No data in other tables is affected.
+
+---
+
+### Core.Application 2.0.0
+
+#### Breaking Changes
+
+- **`SuperAdminBlockBehavior<TRequest, TResponse>` removed.**
+
+  Previously, this pipeline behavior blocked non-impersonating `PlatformAdmin` tokens from reaching handlers marked `IBlockedForSuperAdmin`. The model has changed: a `PlatformAdmin` without an active impersonation session sees **all tenants' data** (no EF Core tenant filter applies); impersonating narrows the view to a single tenant. There is no longer a category of endpoints that PlatformAdmin must be blocked from.
+
+  **Migration guide:** Remove `IBlockedForSuperAdmin` from any handler that implements it. The interface no longer exists and will cause a compile error.
+
+- **`IBlockedForSuperAdmin` marker interface removed.**
+
+  Consumed only by the now-removed `SuperAdminBlockBehavior`. Any handler implementing this interface will fail to compile — remove the interface from the handler's declaration.
+
+#### Changed
+
+- **`AddNArchitecturePipelineBehaviors` no longer registers `SuperAdminBlockBehavior`.**
+
+  No action needed if `AddNArchitecturePipelineBehaviors()` is called (registration is gone automatically). If the behavior was registered manually, remove it.
+
+---
+
 ## [1.1.1] - 2026-06-10
 
 ### Core.Security 1.1.1

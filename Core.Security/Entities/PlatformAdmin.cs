@@ -3,11 +3,9 @@ using NetCoreBackend.NArchitecture.Core.Persistence.Repositories;
 
 namespace NetCoreBackend.NArchitecture.Core.Security.Entities;
 
-// Platform-level administrator — not scoped to any tenant.
-// Stored in a separate table from tenant User records.
-// Use Entity<TId> (not TenantEntity) so no TenantId column is created
-// and EF Core global query filters never apply to this table.
-public class PlatformAdmin<TId> : AuditableEntity<TId>
+// Platform-level administrator. Not scoped to any tenant — no TenantId column,
+// no EF Core global query filter. Stored separately from tenant User records.
+public class PlatformAdmin<TId> : Entity<TId>
 {
     public string Email { get; set; }
     [NotFilterable] public byte[] PasswordSalt { get; set; }

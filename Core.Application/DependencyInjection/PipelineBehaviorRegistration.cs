@@ -32,7 +32,6 @@ public static class PipelineBehaviorRegistration
         // Order matters: registrations resolved in the order they appear here, so guard-style
         // behaviors (auth, validation) run before side-effecting ones (caching, transactions).
         services.AddScoped(typeof(IPipelineBehavior<,>), typeof(AuthorizationBehavior<,>));
-        services.AddScoped(typeof(IPipelineBehavior<,>), typeof(SuperAdminBlockBehavior<,>));
         services.AddScoped(typeof(IPipelineBehavior<,>), typeof(TenantValidationBehavior<,>));
         services.AddScoped(typeof(IPipelineBehavior<,>), typeof(RequestValidationBehavior<,>));
         services.AddScoped(typeof(IPipelineBehavior<,>), typeof(CachingBehavior<,>));
