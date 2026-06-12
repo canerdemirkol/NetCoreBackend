@@ -14,6 +14,7 @@ Entity hiyerarşisi tenant izolasyonunu yansıtır:
 | `EmailAuthenticator<TId>` | `TenantEntity` | Email doğrulama kodu. `TId` PK tipi (User'ın ID tipiyle aynı olması beklenir). |
 | `OtpAuthenticator<TId>` | `TenantEntity` | TOTP tabanlı 2FA. `SecretKey` ham byte[] — production'da `AesGcmEncryptionHelper` ile encrypt'lenip öyle saklanmalı (aşağı bkz.). |
 | `OperationClaim<TId>` | `Entity` | İzin / rol kaydı. Platform genelinde ortaktır, tenant'a özgü değildir. |
+| `AdminRefreshToken<TId, TAdminId>` | `Entity` | PlatformAdmin refresh token'ı. Tenant dışı olduğundan `TenantEntity` değil, `Entity`'den türer. |
 
 `TenantEntity` olan entity'lerin tablosunda `TenantId` sütunu fiziksel olarak bulunur. EF Core global query filter tüm SELECT sorgularına otomatik `WHERE TenantId = @currentTenantId` ekler.
 
@@ -45,6 +46,9 @@ AccessToken token = jwtHelper.CreateToken(user, operationClaims);
 
 // PlatformAdmin token'ı (is_super_admin: true, tenant_id yok)
 AccessToken token = jwtHelper.CreateAdminToken(admin, operationClaims);
+
+// PlatformAdmin refresh token'ı
+AdminRefreshToken<TRefreshTokenId, TUserId> rt = jwtHelper.CreateAdminRefreshToken(admin, ipAddress);
 
 // PlatformAdmin impersonation (is_super_admin: true + tenant_id + is_impersonating: true)
 AccessToken token = jwtHelper.CreateImpersonationToken(admin, operationClaims, tenantId);
@@ -149,6 +153,9 @@ AccessToken token = tokenHelper.CreateToken(user, claims);
 
 // PlatformAdmin — is_super_admin: true, tenant_id yok
 AccessToken token = tokenHelper.CreateAdminToken(admin, claims);
+
+// PlatformAdmin refresh token
+AdminRefreshToken<TRefreshTokenId, TUserId> rt = tokenHelper.CreateAdminRefreshToken(admin, ipAddress);
 
 // Impersonation — is_super_admin: true + tenant_id + is_impersonating: true
 AccessToken token = tokenHelper.CreateImpersonationToken(admin, claims, tenantId);
@@ -290,3 +297,26 @@ public sealed class RefreshAccessTokenHandler
 ```
 
 **Why this matters:** çalınan refresh token'la attacker rotate ederse — legitimate user bir sonraki refresh'inde "already revoked" durumuyla karşılaşır → family revoke tetiklenir → her iki taraf da re-login'e zorlanır. Token sızıntısı kalıcı erişime dönüşmez.
+
+---
+
+## AdminRefreshToken — PlatformAdmin Refresh Token'ı
+
+`AdminRefreshToken<TId, TAdminId>` PlatformAdmin'e özgü refresh token entity'sidir. `TenantEntity` değil `Entity`'den türer — tenant scope'u yoktur, EF Core global query filter uygulanmaz.
+
+```csharp
+token.IsExpired   // DateTime.UtcNow >= ExpirationDate
+token.IsRevoked   // RevokedDate.HasValue
+token.IsActive    // !IsRevoked && !IsExpired
+```
+
+`ITokenHelper` üzerinden üretilir:
+
+```csharp
+AdminRefreshToken<TRefreshTokenId, TUserId> rt =
+    tokenHelper.CreateAdminRefreshToken(admin, ipAddress);
+```
+
+> **Breaking change (v3.0.0):** `ITokenHelper` arayüzüne `CreateAdminRefreshToken` eklendi. `ITokenHelper`'ı doğrudan implement eden sınıfların bu metodu eklemesi gerekir.
+
+Rotation ve reuse detection mantığı tenant `RefreshToken` ile aynıdır; consuming app'te `AdminId` üzerinden family revoke uygulanır.
