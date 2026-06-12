@@ -7,6 +7,30 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [3.0.0] - 2026-06-12
+
+### Core.Security 3.0.0
+
+#### Breaking Changes
+
+- **`ITokenHelper<TUserId, TOperationClaimId, TRefreshTokenId>` has a new method: `CreateAdminRefreshToken`.**
+
+  Any custom implementation of `ITokenHelper` must add this method:
+
+  ```csharp
+  AdminRefreshToken<TRefreshTokenId, TUserId> CreateAdminRefreshToken(PlatformAdmin<TUserId> admin, string ipAddress);
+  ```
+
+  `JwtHelper` already implements it. If you are injecting (not implementing) `ITokenHelper`, no action is needed.
+
+#### Added
+
+- **`AdminRefreshToken<TId, TAdminId>` entity** — refresh token for `PlatformAdmin`. Extends `Entity<TId>` instead of `TenantEntity<TId>` because platform admins are not tenant-scoped. Holds `AdminId` in place of `UserId`. Carries the same rotation/revocation fields (`RevokedDate`, `RevokedByIp`, `ReplacedByToken`, `ReasonRevoked`) and computed properties (`IsExpired`, `IsRevoked`, `IsActive`) as `RefreshToken`.
+
+- **`ITokenHelper.CreateAdminRefreshToken(PlatformAdmin<TUserId> admin, string ipAddress)`** — issues a refresh token for a `PlatformAdmin`. Uses `_tokenOptions.RefreshTokenTtlDays` for expiration, same as `CreateRefreshToken` for regular users.
+
+---
+
 ## [2.0.0] - 2026-06-11
 
 ### Core.Security 2.0.0

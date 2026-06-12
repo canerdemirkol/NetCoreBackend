@@ -41,6 +41,17 @@ public class JwtHelper<TUserId, TOperationClaimId, TRefreshTokenId> : ITokenHelp
         return BuildAccessToken(SetAdminClaims(admin, operationClaims, tenantId: null, isImpersonating: false));
     }
 
+    public AdminRefreshToken<TRefreshTokenId, TUserId> CreateAdminRefreshToken(PlatformAdmin<TUserId> admin, string ipAddress)
+    {
+        return new AdminRefreshToken<TRefreshTokenId, TUserId>()
+        {
+            AdminId = admin.Id,
+            Token = RandomRefreshToken(),
+            ExpirationDate = DateTime.UtcNow.AddDays(_tokenOptions.RefreshTokenTtlDays),
+            CreatedByIp = ipAddress
+        };
+    }
+
     public virtual AccessToken CreateImpersonationToken(
         PlatformAdmin<TUserId> admin,
         IList<OperationClaim<TOperationClaimId>> operationClaims,
