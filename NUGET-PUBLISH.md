@@ -1,120 +1,120 @@
 # NuGet Publishing Guide
 
-Bu repository içindeki **28 class library**'yi (Core.Test hariç) NuGet.org'a yayımlama rehberi.
+A guide to publishing the **28 class libraries** in this repository (excluding Core.Test) to NuGet.org.
 
-> Kısa yol: API key al → `$env:NUGET_API_KEY = "..."` → `./publish-all.ps1` → bitti.
+> Shortcut: get an API key → `$env:NUGET_API_KEY = "..."` → `./publish-all.ps1` → done.
 
 ---
 
-## 1. Önkoşullar
+## 1. Prerequisites
 
-### 1.1 NuGet.org hesabı + API key
+### 1.1 NuGet.org account + API key
 
 ```
 1. https://www.nuget.org → "Sign in with Microsoft"
-2. Profil → "API Keys" → "Create"
+2. Profile → "API Keys" → "Create"
      - Key Name:     net-core-backend-publish
-     - Glob Pattern: NetCoreBackend.NArchitecture.*    ← scope'u kısıtla (full-access değil)
+     - Glob Pattern: NetCoreBackend.NArchitecture.*    ← restrict the scope (not full-access)
      - Scopes:       ✓ Push  ✓ Push new packages and package versions
      - Expires:      365 days
-3. "Create" → key'i bir kez kopyala (bir daha gösterilmez)
+3. "Create" → copy the key once (it is not shown again)
 ```
 
-> **Asla** API key'i `git`'e commit etme. `.env`, plain config dosyası, repo'ya yazılı bir not — hiçbiri olmaz. Production CI/CD için GitHub Secrets / Azure Key Vault gibi secret store kullan.
+> **Never** commit the API key to `git`. A `.env` file, a plain config file, a note written into the repo — none of these are acceptable. For production CI/CD, use a secret store such as GitHub Secrets / Azure Key Vault.
 
 ### 1.2 .NET SDK
 
-`net10.0` build hedefi olduğu için **.NET 10 SDK** gerekir. `dotnet --version` ile doğrula.
+Since the build target is `net10.0`, the **.NET 10 SDK** is required. Verify with `dotnet --version`.
 
 ### 1.3 PowerShell
 
-`publish-all.ps1` Windows PowerShell 5.1 ile de PowerShell 7+ ile de çalışır. Standart Windows kurulumunda zaten 5.1 mevcut — ekstra bir şey yapmana gerek yok.
+`publish-all.ps1` works with both Windows PowerShell 5.1 and PowerShell 7+. A standard Windows installation already has 5.1 — there is nothing extra you need to do.
 
 ---
 
-## 2. Hızlı kullanım
+## 2. Quick usage
 
-### 2.1 NuGet.org'a yayımla
+### 2.1 Publish to NuGet.org
 
 ```powershell
 cd "C:\Users\caner.demirkol\Desktop\New folder\NetCoreBackend"
 
-$env:NUGET_API_KEY = "oy2x..."   # ← Adım 1.1'de kopyaladığın key
+$env:NUGET_API_KEY = "oy2x..."   # ← the key you copied in step 1.1
 
 ./publish-all.ps1
 ```
 
-Beklenen çıktı:
+Expected output:
 
 ```
 === BUILD (Release) ===
 Build succeeded.
 
 === PACK ===
-Paketlenen 28 library + 28 symbol package:
+Packed 28 libraries + 28 symbol packages:
   NetCoreBackend.NArchitecture.Core.Application.1.0.0.nupkg
   NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.Exception.1.0.0.nupkg
-  ... (28 satır)
+  ... (28 lines)
 
 === PUSH → https://api.nuget.org/v3/index.json ===
   → NetCoreBackend.NArchitecture.Core.Application.1.0.0.nupkg
   → ... (28 push)
 
-=== ÖZET ===
-Başarılı push: 28 / 28
-NuGet feed'de görünmesi 5-15 dakika sürebilir (indexing).
+=== SUMMARY ===
+Successful push: 28 / 28
+It may take 5-15 minutes to appear in the NuGet feed (indexing).
 ```
 
-### 2.2 Sadece pack et, push etme (paketleri incelemek için)
+### 2.2 Pack only, don't push (to inspect the packages)
 
 ```powershell
 ./publish-all.ps1 -DryRun
 ```
 
-Paketler `./nupkgs/` altında oluşur, hiçbir yere gönderilmez. NuGet'e gönderilen şeyi `.nupkg`'yi WinRAR/7-Zip'le açıp `.nuspec`'i inceleyerek doğrulayabilirsin.
+The packages are produced under `./nupkgs/` and are not sent anywhere. You can verify what gets sent to NuGet by opening the `.nupkg` with WinRAR/7-Zip and inspecting the `.nuspec`.
 
-### 2.3 Lokal feed'e yayımla (NuGet.org'a gitmeden test et)
+### 2.3 Publish to a local feed (test without going to NuGet.org)
 
-NuGet.org **irreversible**: push edilen bir version silinemez, sadece unlist edilebilir. Önce kendi diskinde test etmek istersen:
+NuGet.org is **irreversible**: a pushed version cannot be deleted, only unlisted. If you want to test on your own disk first:
 
 ```powershell
-# 1. Lokal feed klasörü
+# 1. Local feed folder
 mkdir C:\local-nuget-feed -Force
 
-# 2. publish-all.ps1'i lokal feed'e yönlendir
+# 2. Point publish-all.ps1 at the local feed
 ./publish-all.ps1 -Source "C:\local-nuget-feed"
 
-# 3. Test consumer projesi oluştur ve paketi tüket
+# 3. Create a test consumer project and consume the package
 mkdir C:\test-consumer; cd C:\test-consumer
 dotnet new webapi
 dotnet nuget add source "C:\local-nuget-feed" --name local-test
 dotnet add package NetCoreBackend.NArchitecture.Core.Outbox
-dotnet build    # restore + compile çalışıyor mu?
+dotnet build    # do restore + compile work?
 ```
 
-Lokal'de takılan bir şey yoksa `./publish-all.ps1` (API key set'liyken) ile NuGet.org'a geç.
+If nothing snags locally, move on to NuGet.org with `./publish-all.ps1` (with the API key set).
 
 ---
 
-## 3. publish-all.ps1 parametreleri
+## 3. publish-all.ps1 parameters
 
-| Parametre | Default | Açıklama |
+| Parameter | Default | Description |
 |---|---|---|
-| `-ApiKey` | `$env:NUGET_API_KEY` | Verilmezse environment variable okunur. Lokal feed'de gerekmez. |
-| `-Source` | `https://api.nuget.org/v3/index.json` | Hedef feed URL'i. Lokal klasör de verebilirsin. |
+| `-ApiKey` | `$env:NUGET_API_KEY` | If not provided, the environment variable is read. Not needed for a local feed. |
+| `-Source` | `https://api.nuget.org/v3/index.json` | Target feed URL. You can also pass a local folder. |
 | `-Configuration` | `Release` | Build configuration. |
-| `-OutputDir` | `./nupkgs` | Pack output klasörü. |
-| `-DryRun` | `false` | Push'u atlar, sadece pack yapar. |
+| `-OutputDir` | `./nupkgs` | Pack output folder. |
+| `-DryRun` | `false` | Skips the push, only packs. |
 
 ---
 
-## 4. Yapılan kurulum (referans)
+## 4. Setup performed (reference)
 
-Bu repo `publish-all.ps1`'in çalışması için aşağıdaki dosyalarla hazırlandı:
+This repo was prepared with the following files so that `publish-all.ps1` works:
 
 ### 4.1 `Directory.Build.props`
 
-Tüm csproj'lara otomatik uygulanan ortak metadata:
+Common metadata applied automatically to all csproj files:
 
 ```xml
 <Project>
@@ -136,7 +136,7 @@ Tüm csproj'lara otomatik uygulanan ortak metadata:
 </Project>
 ```
 
-Her library kendi klasöründeki `README.md`'sini paketin köküne kopyalar → NuGet.org sayfasında README görünür.
+Each library copies the `README.md` from its own folder to the package root → the README is shown on the NuGet.org page.
 
 ### 4.2 `Core.Test/Core.Test.csproj`
 
@@ -145,7 +145,7 @@ Her library kendi klasöründeki `README.md`'sini paketin köküne kopyalar → 
 <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
 ```
 
-Core.Test framework'ün kendi xUnit regression suite'i + tüketici test helper'larını içerir; paketlenmez. (Helper'ları NuGet'ten dağıtmak istenirse `Core.TestKit` adıyla ayrı bir proje önerilir.)
+Core.Test contains the framework's own xUnit regression suite + consumer test helpers; it is not packaged. (If you want to distribute the helpers via NuGet, a separate project named `Core.TestKit` is recommended.)
 
 ### 4.3 `.gitignore`
 
@@ -153,13 +153,13 @@ Core.Test framework'ün kendi xUnit regression suite'i + tüketici test helper'l
 nupkgs/
 ```
 
-Pack output git'e girmesin.
+Keep the pack output out of git.
 
 ---
 
-## 5. Yayımlanan paketler (28 adet)
+## 5. Published packages (28 in total)
 
-### Kademe 1 — sıfır internal dependency (paralel push'lanabilir)
+### Tier 1 — zero internal dependencies (can be pushed in parallel)
 
 ```
 NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.Exception
@@ -171,7 +171,7 @@ NetCoreBackend.NArchitecture.Core.Translation.Abstraction
 NetCoreBackend.NArchitecture.Core.Persistence
 ```
 
-### Kademe 2 — Kademe 1'e bağımlı
+### Tier 2 — depends on Tier 1
 
 ```
 NetCoreBackend.NArchitecture.Core.MultiTenancy
@@ -186,7 +186,7 @@ NetCoreBackend.NArchitecture.Core.Localization.Translation
 NetCoreBackend.NArchitecture.Core.Outbox
 ```
 
-### Kademe 3 — DI extension'ları ve adapter'lar (Kademe 1+2'ye bağımlı)
+### Tier 3 — DI extensions and adapters (depends on Tier 1+2)
 
 ```
 NetCoreBackend.NArchitecture.Core.Application
@@ -202,37 +202,37 @@ NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.Logging.Serilog.File
 NetCoreBackend.NArchitecture.Core.Outbox.DependencyInjection
 ```
 
-`publish-all.ps1` kademe sırasına dikkat etmez (sıralı serial push); ilk yayım sonrasında restore çakışması olmaz çünkü her push tamamlanınca NuGet feed bir sonraki paketin dependency'sini hemen sunabilir.
+`publish-all.ps1` does not care about tier order (it does a sequential serial push); there is no restore conflict after the first publish, because once each push completes the NuGet feed can immediately serve the next package's dependency.
 
 ---
 
-## 6. Versiyon yönetimi
+## 6. Version management
 
-### 6.1 Mevcut versiyon
+### 6.1 Current version
 
-Tüm csproj'larda `<Version>1.0.0</Version>`. Aynı version'u tekrar push etmeye çalışmak `--skip-duplicate` flag'i sayesinde sessiz no-op olur (hata değil).
+`<Version>1.0.0</Version>` in all csproj files. Trying to push the same version again is a silent no-op thanks to the `--skip-duplicate` flag (not an error).
 
-### 6.2 Yeni yayım için bump
+### 6.2 Bumping for a new release
 
-Tek tek 28 csproj güncellemek yerine `Directory.Build.props`'ta merkezi version tut:
+Instead of updating all 28 csproj files one by one, keep a central version in `Directory.Build.props`:
 
 ```xml
 <PropertyGroup>
-  <Version>1.1.0</Version>      <!-- tek noktada -->
+  <Version>1.1.0</Version>      <!-- in a single place -->
   ...
 </PropertyGroup>
 ```
 
-Her csproj'daki `<Version>1.0.0</Version>` satırını sil → Directory.Build.props'taki değer otomatik geçerli olur. (Şu an csproj'lar her birinde 1.0.0 var; ilk version bump'tan sonra bu konsolidasyon önerilir.)
+Delete the `<Version>1.0.0</Version>` line from each csproj → the value in Directory.Build.props automatically takes effect. (Right now each csproj has 1.0.0; this consolidation is recommended after the first version bump.)
 
-### 6.3 SemVer kuralı
+### 6.3 SemVer rule
 
 ```
-1.0.0          ← ilk stabil yayım
-1.0.1          ← bug fix (R5 doc gibi)
-1.1.0          ← yeni feature (Outbox eklendi gibi)
-2.0.0          ← breaking change (IElasticSearch API'sini değiştirdik gibi)
-1.1.0-beta.1   ← test için pre-release (NuGet.org "Show prerelease" ile görünür)
+1.0.0          ← first stable release
+1.0.1          ← bug fix (e.g. an R5 doc)
+1.1.0          ← new feature (e.g. Outbox added)
+2.0.0          ← breaking change (e.g. we changed the IElasticSearch API)
+1.1.0-beta.1   ← pre-release for testing (visible on NuGet.org via "Show prerelease")
 ```
 
 ---
@@ -241,98 +241,98 @@ Her csproj'daki `<Version>1.0.0</Version>` satırını sil → Directory.Build.p
 
 ### "publish-all.ps1 cannot be loaded because running scripts is disabled on this system"
 
-Windows'ta PowerShell ExecutionPolicy default olarak imzasız script'leri reddeder. **Sadece o terminal session'ı için** bypass et — sistem-wide değişiklik yapma:
+On Windows, the PowerShell ExecutionPolicy rejects unsigned scripts by default. Bypass it **for that terminal session only** — do not make a system-wide change:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 ./publish-all.ps1 -DryRun
 ```
 
-`-Scope Process` flag'i kritik: bypass terminal kapanınca biter, kalıcı değil. `-Scope CurrentUser` veya `-Scope LocalMachine` ile yapma — sonradan unutursun, sistem güvenlik açığı olur.
+The `-Scope Process` flag is critical: the bypass ends when the terminal closes, it is not permanent. Do not use `-Scope CurrentUser` or `-Scope LocalMachine` — you will forget it later and it becomes a system security hole.
 
 ### "Response status code does not indicate success: 403"
 
-Yanlış API key veya scope. NuGet.org → API Keys → key'in glob pattern'ı `NetCoreBackend.NArchitecture.*`'a uyuyor mu kontrol et.
+Wrong API key or scope. NuGet.org → API Keys → check that the key's glob pattern matches `NetCoreBackend.NArchitecture.*`.
 
 ### "A package with id 'X' and version '1.0.0' already exists"
 
-Aynı version daha önce push edilmiş. `--skip-duplicate` flag'i bunu zaten silently atlar. Version'u bump'la.
+The same version has been pushed before. The `--skip-duplicate` flag already skips this silently. Bump the version.
 
 ### "Unable to load the service index"
 
-NuGet feed'e ağ erişimi yok. `https://api.nuget.org/v3/index.json` browser'da açılıyor mu? Proxy/firewall kontrolü.
+No network access to the NuGet feed. Does `https://api.nuget.org/v3/index.json` open in a browser? Check the proxy/firewall.
 
 ### "Failed to publish symbol package"
 
-`.snupkg` push'u 503 verirse problem değil — sembol paketleri ayrı feed'e gider (symbols.nuget.org) ve genelde gecikmeli işlenir. `dotnet nuget push` otomatik retry yapar.
+If the `.snupkg` push returns 503, it is not a problem — symbol packages go to a separate feed (symbols.nuget.org) and are usually processed with a delay. `dotnet nuget push` retries automatically.
 
-### Pack çıktısında yanlış README
+### Wrong README in the pack output
 
-Her csproj kendi klasöründeki `README.md`'yi paketler. Yanlış README görüyorsan `Directory.Build.props`'taki `Exists('$(MSBuildProjectDirectory)\README.md')` koşulu doğru çalışmıyor olabilir — proje klasörünün gerçek path'ini kontrol et.
+Each csproj packs the `README.md` from its own folder. If you see the wrong README, the `Exists('$(MSBuildProjectDirectory)\README.md')` condition in `Directory.Build.props` may not be working correctly — check the project folder's actual path.
 
-### Build clean, pack'te NU5128
+### Build clean, NU5128 on pack
 
-"PackageReadmeFile is set but file is missing" — proje klasöründe `README.md` yok ama Directory.Build.props onu pack'e ekleyemiyor. Eksik library için README.md oluştur veya `<PackageReadmeFile></PackageReadmeFile>` ile o projede property'yi boşalt.
+"PackageReadmeFile is set but file is missing" — there is no `README.md` in the project folder, but Directory.Build.props cannot add it to the pack. Create a README.md for the missing library, or clear the property in that project with `<PackageReadmeFile></PackageReadmeFile>`.
 
 ### "The package version is invalid"
 
-`<Version>` formatı SemVer'e uymuyor. `1.0.0`, `1.0.0-beta.1` OK; `v1.0` ya da `1.0` yanlış.
+The `<Version>` format does not conform to SemVer. `1.0.0`, `1.0.0-beta.1` are OK; `v1.0` or `1.0` are wrong.
 
 ---
 
-## 8. Yayım sonrası
+## 8. After publishing
 
-### 8.1 İndexing
+### 8.1 Indexing
 
-NuGet feed'de paketin görünmesi 5-15 dakika sürer. Bu süre içinde:
+It takes 5-15 minutes for a package to appear in the NuGet feed. During this time:
 
 - `https://www.nuget.org/packages/NetCoreBackend.NArchitecture.Core.Outbox` → "Package not found"
 - `dotnet add package` → restore fail
 
-Sabırla bekle. Bir defalık bir gecikme; sonraki version'larda daha hızlı index'lenir.
+Be patient. It is a one-time delay; subsequent versions are indexed faster.
 
-### 8.2 NuGet sayfasını kontrol et
+### 8.2 Check the NuGet page
 
-Her paketin sayfasında olması gerekenler:
+What should be present on each package's page:
 - ✅ MIT license badge
-- ✅ README görünümü (klasördeki README.md'nin render'ı)
+- ✅ README view (the render of the folder's README.md)
 - ✅ Description
 - ✅ Tags
-- ✅ "Dependencies" listesi doğru
-- ✅ "Versions" tab'inde sadece 1.0.0
-- ❌ "Source repository" linki (henüz public repo yok, boş bırakıldı)
-- ❌ "Project website" linki (aynı sebep)
+- ✅ The "Dependencies" list is correct
+- ✅ Only 1.0.0 in the "Versions" tab
+- ❌ "Source repository" link (no public repo yet, left empty)
+- ❌ "Project website" link (same reason)
 
-### 8.3 Paketi unlist etmek (silmek değil)
+### 8.3 Unlisting a package (not deleting)
 
-Yanlış push'u geri almak istersen:
+If you want to roll back a wrong push:
 
 ```
 1. https://www.nuget.org/packages/<package-id>/<version> → "Manage Package"
-2. "Listing" → "List package in search results" kutusunu KAPAT → Save
+2. "Listing" → UNCHECK the "List package in search results" box → Save
 ```
 
-Unlist edilen paket arama sonuçlarında görünmez ama version'ı koruyorsun — yeniden push edemiyorsun. Aynı version'u tekrar yayımlamak ya unlisted bırakılması ya da yeni version push edilmesi gerekir.
+An unlisted package does not appear in search results, but you keep its version — you cannot push it again. To republish the same version, it must either be left unlisted or a new version must be pushed.
 
 ---
 
-## 9. Gelecek
+## 9. Future
 
-İlerde yapılması anlamlı olanlar (sıralama gevşek, ihtiyaca göre):
+Things worth doing later (loosely ordered, as needed):
 
-- [ ] **GitHub repo'su açıp** `RepositoryUrl` ve `PackageProjectUrl`'i Directory.Build.props'a doldur — NuGet sayfasında "Source repository" / "Project website" linkleri görünür.
-- [ ] **SourceLink** ekle — tüketici `.snupkg`'leri kullandığında IDE'den paketin orijinal source'una step-in yapabilir. Tek paket: `Microsoft.SourceLink.GitHub`, otomatik çalışır.
-- [ ] **CI/CD pipeline** — GitHub Actions / Azure DevOps ile `main`'e merge'de otomatik publish. Manual `publish-all.ps1`'in yerine geçer.
-- [ ] **PackageIcon** — Directory.Build.props'a icon ekle (PNG, 128x128). NuGet sayfasında brand görünür.
-- [ ] **Merkezi Version** — csproj'lardan `<Version>1.0.0</Version>` satırlarını sil, Directory.Build.props'ta tek değer bırak.
-- [ ] **PackageId kısalt** — `NetCoreBackend.NArchitecture.Core.X` çok uzun. Repo public olduktan sonra `NArchitecture.Core.X` veya başka kısa namespace mümkün.
+- [ ] **Open a GitHub repo** and fill in `RepositoryUrl` and `PackageProjectUrl` in Directory.Build.props — the "Source repository" / "Project website" links appear on the NuGet page.
+- [ ] Add **SourceLink** — when a consumer uses the `.snupkg` files, they can step into the package's original source from the IDE. A single package: `Microsoft.SourceLink.GitHub`, works automatically.
+- [ ] **CI/CD pipeline** — automatic publish on merge to `main` via GitHub Actions / Azure DevOps. Replaces the manual `publish-all.ps1`.
+- [ ] **PackageIcon** — add an icon to Directory.Build.props (PNG, 128x128). The brand appears on the NuGet page.
+- [ ] **Central Version** — delete the `<Version>1.0.0</Version>` lines from the csproj files, leave a single value in Directory.Build.props.
+- [ ] **Shorten the PackageId** — `NetCoreBackend.NArchitecture.Core.X` is too long. After the repo goes public, `NArchitecture.Core.X` or another short namespace becomes possible.
 
 ---
 
-## 10. İlgili dosyalar
+## 10. Related files
 
-- [`Directory.Build.props`](./Directory.Build.props) — tüm csproj'lara uygulanan ortak metadata
-- [`publish-all.ps1`](./publish-all.ps1) — otomasyon script'i
-- [`Directory.Packages.props`](./Directory.Packages.props) — CPM (Central Package Management) — paket versiyon merkezi
-- [`README.md`](./README.md) — projenin ana README'si
-- [`SETUP.md`](./SETUP.md) — tüketici uygulamanın bu paketleri nasıl kullanacağı
+- [`Directory.Build.props`](./Directory.Build.props) — common metadata applied to all csproj files
+- [`publish-all.ps1`](./publish-all.ps1) — the automation script
+- [`Directory.Packages.props`](./Directory.Packages.props) — CPM (Central Package Management) — central package version registry
+- [`README.md`](./README.md) — the project's main README
+- [`SETUP.md`](./SETUP.md) — how a consuming application uses these packages

@@ -1,6 +1,6 @@
 # Core.Mailing
 
-Email gönderme soyutlaması ve veri modelleri.
+Email sending abstraction and data models.
 
 ## Interface
 
@@ -12,14 +12,14 @@ public interface IMailService
 }
 ```
 
-## Mail Modeli
+## Mail Model
 
 ```csharp
 Mail mail = new()
 {
-    Subject = "Hoş Geldiniz!",
-    TextBody = "Kaydınız tamamlandı.",
-    HtmlBody = "<h1>Hoş Geldiniz!</h1><p>Kaydınız tamamlandı.</p>",
+    Subject = "Welcome!",
+    TextBody = "Your registration is complete.",
+    HtmlBody = "<h1>Welcome!</h1><p>Your registration is complete.</p>",
     ToList = [new MailboxAddress("Ahmet Yılmaz", "user@example.com")],
     CcList = [],
     BccList = [],
@@ -50,18 +50,18 @@ Mail mail = new()
 
 ### TLS Mode
 
-`MailSettings.TlsMode` (enum `MailTlsMode`) MailKit'in `SecureSocketOptions` değerine map edilir:
+`MailSettings.TlsMode` (the `MailTlsMode` enum) is mapped to MailKit's `SecureSocketOptions` value:
 
-| Mode | SMTP davranışı | Tipik port |
+| Mode | SMTP behavior | Typical port |
 |---|---|---|
-| `None` | TLS yok (plaintext) | 25 (sadece dev) |
-| `Auto` | MailKit port'a bakar | — |
-| `SslOnConnect` | Bağlantıdan itibaren TLS | 465 |
-| `StartTls` | STARTTLS zorunlu | 587 |
-| `StartTlsWhenAvailable` (default) | STARTTLS varsa kullan | 587 / 25 |
+| `None` | No TLS (plaintext) | 25 (dev only) |
+| `Auto` | MailKit decides based on the port | — |
+| `SslOnConnect` | TLS from the moment of connection | 465 |
+| `StartTls` | STARTTLS required | 587 |
+| `StartTlsWhenAvailable` (default) | Use STARTTLS if available | 587 / 25 |
 
-Default `StartTlsWhenAvailable` çoğu modern SMTP sağlayıcı için doğrudur. Port 465 (legacy implicit-TLS) kullanıyorsan `SslOnConnect` set etmelisin.
+The default `StartTlsWhenAvailable` is correct for most modern SMTP providers. If you are using port 465 (legacy implicit TLS), you must set `SslOnConnect`.
 
-## Implementasyon
+## Implementation
 
-[`Core.Mailing.MailKit`](../Core.Mailing.MailKit/README.md) — MailKit SMTP implementasyonu
+[`Core.Mailing.MailKit`](../Core.Mailing.MailKit/README.md) — MailKit SMTP implementation

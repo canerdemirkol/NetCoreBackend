@@ -1,51 +1,51 @@
 # Core.MultiTenancy
 
-SaaS uygulamaları için multi-tenant altyapısı. Tenant tespitini JWT claim, HTTP header ve subdomain üzerinden sırayla yapar.
+Multi-tenant infrastructure for SaaS applications. It performs tenant detection in order via JWT claim, HTTP header, and subdomain.
 
-## Tenant Tespiti (Öncelik Sırası)
+## Tenant Detection (Priority Order)
 
 ```
-1. JWT claim: "tenant_id"          → En güvenli, token doğrulandıktan sonra gelir
-2. HTTP Header: X-Tenant-ID        → API client'lar ve geliştirme ortamı için
-3. Subdomain: acme.yourapp.com     → Production SaaS URL yapısı için
+1. JWT claim: "tenant_id"          → Most secure, available after the token is validated
+2. HTTP Header: X-Tenant-ID        → For API clients and the development environment
+3. Subdomain: acme.yourapp.com     → For the production SaaS URL structure
 ```
 
-## Bileşenler
+## Components
 
-| Bileşen | Açıklama |
+| Component | Description |
 |---|---|
-| `Tenant` | Tenant kaydı entity'si (name, identifier/slug, domain, plan, defaultLocale, isActive) |
-| `ITenantContext` | Mevcut tenant'ı okumak için DI'a inject edilen interface |
-| `TenantContext` | Scoped, request başına sıfırlanan ITenantContext implementasyonu |
-| `ITenantService` | Uygulamada implement edilmesi gereken tenant lookup interface'i |
-| `TenantEntitySetter` | `ITenantEntitySetter` implementasyonu — Add işlemlerinde TenantId'yi otomatik set eder |
-| `TenantMiddleware` | Her request'te tenant'ı çözen middleware. JWT'de tenant_id varken tenant DB'de yoksa 401 döner. |
-| `TenantClaimTypes` | Claim key sabitleri (tenant_id, is_super_admin, is_impersonating) |
+| `Tenant` | The tenant record entity (name, identifier/slug, domain, plan, defaultLocale, isActive) |
+| `ITenantContext` | Interface injected into DI for reading the current tenant |
+| `TenantContext` | Scoped ITenantContext implementation, reset per request |
+| `ITenantService` | The tenant lookup interface that must be implemented in the application |
+| `TenantEntitySetter` | `ITenantEntitySetter` implementation — automatically sets TenantId on Add operations |
+| `TenantMiddleware` | Middleware that resolves the tenant on every request. Returns 401 when tenant_id is present in the JWT but the tenant does not exist in the DB. |
+| `TenantClaimTypes` | Claim key constants (tenant_id, is_super_admin, is_impersonating) |
 
-## Kurulum
+## Setup
 
 ```csharp
 // Program.cs
 builder.Services.AddMultiTenancy();
-// → ITenantContext, TenantContext ve ITenantEntitySetter otomatik kaydedilir
+// → ITenantContext, TenantContext, and ITenantEntitySetter are registered automatically
 
 builder.Services.AddScoped<ITenantService, YourTenantService>();
 
 app.UseAuthentication();
-app.UseMultiTenancy();   // UseAuthentication'dan SONRA gelmeli
+app.UseMultiTenancy();   // must come AFTER UseAuthentication
 app.UseAuthorization();
 ```
 
-> **Middleware sırası neden önemli?**
-> `TenantMiddleware`'in 1. öncelik kaynağı JWT'deki `tenant_id` claim'idir. Bu claim ancak
-> `UseAuthentication()` çalıştıktan sonra `HttpContext.User` üzerinden okunabilir. Sıralama
-> ters olursa `User.Claims` boş kalır, middleware doğrudan header/subdomain fallback'lerine
-> düşer ve oturum açmış kullanıcılar bile yanlış tenant'a (veya hiçbir tenant'a) yönlendirilir.
+> **Why does middleware order matter?**
+> `TenantMiddleware`'s primary source is the `tenant_id` claim in the JWT. This claim can only
+> be read via `HttpContext.User` after `UseAuthentication()` has run. If the order is
+> reversed, `User.Claims` stays empty, the middleware falls straight through to the
+> header/subdomain fallbacks, and even logged-in users are routed to the wrong tenant (or to no tenant at all).
 
-`AddMultiTenancy()` şunları kaydeder:
+`AddMultiTenancy()` registers the following:
 - `TenantContext` (scoped)
 - `ITenantContext` → `TenantContext` (scoped)
-- `ITenantEntitySetter` → `TenantEntitySetter` (scoped) — ayrıca kaydetmeye gerek yoktur
+- `ITenantEntitySetter` → `TenantEntitySetter` (scoped) — no need to register it separately
 
 ## Tenant Entity
 
@@ -57,27 +57,27 @@ public class Tenant : Entity<Guid>
     public string? Domain { get; set; }
     public bool IsActive { get; set; }
     public TenantPlanType PlanType { get; set; }
-    public string? DefaultLocale { get; set; }  // "tr", "de" — Accept-Language yoksa fallback
+    public string? DefaultLocale { get; set; }  // "tr", "de" — fallback when Accept-Language is absent
 }
 ```
 
-`DefaultLocale`: Client `Accept-Language` header'ı göndermediğinde `LocalizationMiddleware` bu değeri fallback olarak kullanır.
+`DefaultLocale`: When the client does not send an `Accept-Language` header, `LocalizationMiddleware` uses this value as a fallback.
 
-> **`Identifier` unique olmalı.** Framework code-level uniqueness check yapmıyor; DB constraint'i
-> consuming app'in `DbContext` konfigürasyonunda eklenmeli:
+> **`Identifier` must be unique.** The framework does not perform a code-level uniqueness check; the DB constraint
+> must be added in the consuming app's `DbContext` configuration:
 > ```csharp
 > modelBuilder.Entity<Tenant>().HasIndex(t => t.Identifier).IsUnique();
-> // Domain için de aynı (Domain nullable, multi-tenant)
+> // Same for Domain (Domain is nullable, multi-tenant)
 > modelBuilder.Entity<Tenant>()
 >     .HasIndex(t => t.Domain)
 >     .IsUnique()
 >     .HasFilter("[Domain] IS NOT NULL");
 > ```
-> Bu constraint olmazsa `acme` slug'lı iki Tenant kaydı oluşturulabilir, `GetBySlugAsync`
-> belirsiz sonuç döndürür.
+> Without this constraint, two Tenant records with the `acme` slug can be created, and `GetBySlugAsync`
+> returns an ambiguous result.
 
 ## SuperAdmin
 
-JWT'de `is_super_admin: true` ve `tenant_id: null` olan kullanıcı tüm tenant verilerine erişir (EF Core global filter bypass edilir). Belirli bir tenant'a geçmek için impersonation token kullanılır.
+A user with `is_super_admin: true` and `tenant_id: null` in the JWT can access all tenants' data (the EF Core global filter is bypassed). To switch to a specific tenant, an impersonation token is used.
 
-Detaylı dokümantasyon: [TENANT.md](../TENANT.md)
+Detailed documentation: [TENANT.md](../TENANT.md)

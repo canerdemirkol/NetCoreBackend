@@ -1,5 +1,5 @@
 using FluentValidation;
-using MediatR;
+using NetCoreBackend.NArchitecture.Core.Mediation.Abstractions;
 using NetCoreBackend.NArchitecture.Core.Application.Pipelines.Validation;
 using NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.Exception.Types;
 using ValidationException = NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.Exception.Types.ValidationException;

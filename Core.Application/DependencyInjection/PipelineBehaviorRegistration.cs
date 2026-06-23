@@ -1,4 +1,4 @@
-using MediatR;
+using NetCoreBackend.NArchitecture.Core.Mediation.Abstractions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;

@@ -1,6 +1,6 @@
 ﻿using System.Text;
 using System.Text.Json;
-using MediatR;
+using NetCoreBackend.NArchitecture.Core.Mediation.Abstractions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;

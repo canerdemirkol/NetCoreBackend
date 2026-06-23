@@ -1,11 +1,11 @@
 # Core.CrossCuttingConcerns.Logging.DependencyInjection
 
-Logger implementasyonunu DI container'a kaydeden extension metot.
+An extension method that registers the logger implementation with the DI container.
 
-## Kurulum
+## Installation
 
 ```csharp
-// Program.cs — SerilogFileLogger ile
+// Program.cs — with SerilogFileLogger
 var fileLogConfig = builder.Configuration
     .GetSection("FileLogConfiguration")
     .Get<FileLogConfiguration>()!;
@@ -13,4 +13,4 @@ var fileLogConfig = builder.Configuration
 builder.Services.AddLogging(new SerilogFileLogger(fileLogConfig));
 ```
 
-`ServiceCollectionLoggingExtensions.AddLogging(ILogger logger)` extension metodu verilen `ILogger` instance'ını singleton olarak kaydeder — tüm request'ler aynı logger instance'ını paylaşır.
+The `ServiceCollectionLoggingExtensions.AddLogging(ILogger logger)` extension method registers the given `ILogger` instance as a singleton — all requests share the same logger instance.

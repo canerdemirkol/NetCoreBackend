@@ -1,5 +1,5 @@
 ﻿using System.Diagnostics;
-using MediatR;
+using NetCoreBackend.NArchitecture.Core.Mediation.Abstractions;
 using Microsoft.Extensions.Logging;
 
 namespace NetCoreBackend.NArchitecture.Core.Application.Pipelines.Performance;

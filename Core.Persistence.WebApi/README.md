@@ -1,28 +1,28 @@
 # Core.Persistence.WebApi
 
-Uygulama başlangıcında EF Core migration'larını otomatik uygulayan middleware extension.
+A middleware extension that automatically applies EF Core migrations at application startup.
 
-## Kurulum
+## Installation
 
 ```csharp
 // Program.cs
-// 1. Migration applier'ı kaydet (Core.Persistence.DependencyInjection)
+// 1. Register the migration applier (Core.Persistence.DependencyInjection)
 builder.Services.AddDbMigrationApplier<AppDbContext>();
 
-// 2. Uygulama başlarken çalıştır
+// 2. Run it when the application starts
 app.UseDbMigrationApplier();
 ```
 
-## Nasıl Çalışır
+## How It Works
 
 `ApplicationBuilderDbMigrationApplierExtensions.UseDbMigrationApplier()`:
 
-1. DI'dan tüm `IDbMigrationApplierService` implementasyonlarını resolve eder
-2. Her biri için `Initialize()` çağırır
-3. `Initialize()` → `DbContext.Database.Migrate()` (relational) veya `EnsureCreated()` (in-memory) → bekleyen migration'lar uygulanır
+1. Resolves all `IDbMigrationApplierService` implementations from DI
+2. Calls `Initialize()` on each of them
+3. `Initialize()` → `DbContext.Database.Migrate()` (relational) or `EnsureCreated()` (in-memory) → pending migrations are applied
 
-## Dikkat
+## Caution
 
-- Bu extension, migration'ları her startup'ta çalıştırır
-- Production'da migration'ları CI/CD pipeline'ı üzerinden ayrıca uygulamak daha güvenlidir
-- Development ortamında kolay kurulum için idealdir
+- This extension runs migrations on every startup
+- In production, it is safer to apply migrations separately through a CI/CD pipeline
+- It is ideal for easy setup in a development environment

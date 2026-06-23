@@ -1,8 +1,8 @@
 # Core.CrossCuttingConcerns.CorrelationId
 
-Her request'i takip edebilmek için correlation ID abstraction'ı. Application katmanında `ICorrelationIdAccessor`'a bağımlı olunabilir; ASP.NET Core dependency'si gerekmez.
+A correlation ID abstraction for tracking each request. The application layer can depend on `ICorrelationIdAccessor` without requiring an ASP.NET Core dependency.
 
-## Kurulum
+## Installation
 
 ```
 dotnet add package NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.CorrelationId
@@ -17,7 +17,7 @@ public interface ICorrelationIdAccessor
 }
 ```
 
-## Kullanım (Application / MediatR Handler)
+## Usage (Application / MediatR Handler)
 
 ```csharp
 public class CreateOrderCommandHandler : IRequestHandler<CreateOrderCommand>
@@ -32,9 +32,9 @@ public class CreateOrderCommandHandler : IRequestHandler<CreateOrderCommand>
     public async Task Handle(CreateOrderCommand request, CancellationToken cancellationToken)
     {
         string? correlationId = _correlationIdAccessor.CorrelationId;
-        // audit log, outbox mesajı vb. için kullanılabilir
+        // can be used for audit logs, outbox messages, etc.
     }
 }
 ```
 
-> DI kaydı ve middleware için `Core.CrossCuttingConcerns.CorrelationId.WebApi` paketini kullanın.
+> For DI registration and middleware, use the `Core.CrossCuttingConcerns.CorrelationId.WebApi` package.

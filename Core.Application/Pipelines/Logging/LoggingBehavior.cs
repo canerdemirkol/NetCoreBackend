@@ -1,5 +1,5 @@
 ﻿using System.Text.Json;
-using MediatR;
+using NetCoreBackend.NArchitecture.Core.Mediation.Abstractions;
 using Microsoft.AspNetCore.Http;
 using NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.Logging;
 using NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.Logging.Abstraction;

@@ -7,6 +7,67 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [2026-06-23]
+
+### Core.Mediation 1.0.0 — New package
+
+A minimal, license-free in-process mediator that replaces the subset of MediatR the framework
+used. MediatR 12.4+ requires a commercial license; this package removes that dependency while
+preserving every behavior the codebase relies on (~150 LOC).
+
+#### Added
+
+- **`Core.Mediation.Abstractions` namespace** — request/handler contracts: `IRequest<TResponse>`, non-generic `IRequest` (`: IRequest<Unit>`), `IRequestHandler<TRequest, TResponse>`, single-parameter `IRequestHandler<TRequest>` (void commands, bridged to `Unit` via a Default Interface Method), `IPipelineBehavior<TRequest, TResponse>`, `RequestHandlerDelegate<TResponse>`, `Unit`, and `IMediator`.
+- **`Core.Mediation` namespace** — the runtime `Mediator` dispatcher: resolves the handler and all opt-in `IPipelineBehavior<,>` from DI, composes them into a nested pipeline (registration order = execution order), and caches the per-request-type wrapper in a `ConcurrentDictionary`.
+- **`Core.Mediation.DependencyInjection` namespace** — `AddMediator(params Assembly[])`, the drop-in replacement for `AddMediatR(...)`. Registers `IMediator` as scoped and scans assemblies for `IRequestHandler<,>` implementations.
+- Single dependency: `Microsoft.Extensions.DependencyInjection.Abstractions`.
+
+---
+
+### Core.Application 3.0.0
+
+#### Breaking Changes
+
+- **MediatR dependency removed.** The CQRS/pipeline contracts (`IRequest`, `IRequestHandler`, `IPipelineBehavior`, `IMediator`, `Unit`, `RequestHandlerDelegate`) now come from the new `Core.Mediation` package instead of the `MediatR` namespace.
+
+  **Migration guide:** in every file that referenced these types, replace the import:
+
+  ```diff
+  - using MediatR;
+  + using NetCoreBackend.NArchitecture.Core.Mediation.Abstractions;
+  ```
+
+  Where `AddMediatR(...)` was called, switch to `AddMediator(...)` and add `using NetCoreBackend.NArchitecture.Core.Mediation.DependencyInjection;`:
+
+  ```diff
+  - services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(assembly));
+  + services.AddMediator(assembly);
+  ```
+
+  Behavior is unchanged: pipeline execution order, opt-in marker interfaces, and the void-command path all work exactly as before. Void command handlers must implement **only** `Task Handle(...)` — the two-parameter `Task<Unit> Handle(...)` is supplied by the DIM bridge and must not be hand-implemented.
+
+#### Changed
+
+- `Core.Application` now depends on `Core.Mediation` (project/package reference) instead of `MediatR`. Consumers receive `Core.Mediation` transitively.
+
+> **Publish order:** publish `Core.Mediation 1.0.0` first, then `Core.Application 3.0.0` (the latter depends on the former).
+
+---
+
+### Documentation — all package READMEs translated to English (patch releases)
+
+Every package README (and the root guides, scripts, and this changelog) was translated from Turkish to English. Because a README is embedded in its `.nupkg`, each affected package received a **patch bump** so the English README reaches NuGet (a re-push at the same version is skipped by `--skip-duplicate`). No code changed in these packages — docs only.
+
+- `1.0.0 → 1.0.1`: Core.CrossCuttingConcerns.Exception, Core.CrossCuttingConcerns.Exception.WebAPI, Core.CrossCuttingConcerns.Logging, Core.CrossCuttingConcerns.Logging.Abstraction, Core.CrossCuttingConcerns.Logging.DependencyInjection, Core.CrossCuttingConcerns.Logging.SeriLog, Core.CrossCuttingConcerns.CorrelationId, Core.CrossCuttingConcerns.CorrelationId.WebApi, Core.Localization.Abstraction, Core.Localization.Translation, Core.Localization.Resource.Yaml, Core.Localization.Resource.Yaml.DependencyInjection, Core.Localization.WebApi, Core.Translation.Abstraction, Core.Translation.AmazonTranslate, Core.Translation.AmazonTranslate.DependencyInjection, Core.Mailing, Core.Mailing.MailKit, Core.ElasticSearch, Core.Outbox, Core.Outbox.DependencyInjection, Core.Persistence.DependencyInjection, Core.Persistence.WebApi, Core.Security.DependencyInjection, Core.Security.WebApi.Swagger
+- `1.0.1 → 1.0.2`: Core.CrossCuttingConcerns.Logging.Serilog.File
+- `1.1.1 → 1.1.2`: Core.Persistence
+- `2.0.0 → 2.0.1`: Core.MultiTenancy
+- `3.0.0 → 3.0.1`: Core.Security
+
+> Core.Application (3.0.0) and Core.Mediation (1.0.0) already ship their English READMEs with the versions above — no extra docs bump needed.
+
+---
+
 ## [3.0.0] - 2026-06-12
 
 ### Core.Security 3.0.0

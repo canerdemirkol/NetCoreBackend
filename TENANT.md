@@ -75,8 +75,8 @@ public class Product : TenantEntity<Guid>
 ### Which entities should be TenantEntity?
 
 ```
-Tenant'a ait veri → TenantEntity    (Orders, Products, Invoices, Users, ...)
-Platform'un ortak verisi → Entity   (Countries, Currencies, OperationClaims, Tenant itself, ...)
+Data belonging to a tenant → TenantEntity    (Orders, Products, Invoices, Users, ...)
+Platform-wide shared data → Entity            (Countries, Currencies, OperationClaims, Tenant itself, ...)
 ```
 
 `Core.Security` entities are already configured correctly out of the box:

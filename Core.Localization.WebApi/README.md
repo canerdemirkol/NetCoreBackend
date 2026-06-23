@@ -1,43 +1,43 @@
 # Core.Localization.WebApi
 
-HTTP `Accept-Language` header'ından locale tespiti yapan middleware.
+Middleware that detects the locale from the HTTP `Accept-Language` header.
 
-## Kurulum
+## Setup
 
 ```csharp
 // Program.cs
 app.UseResponseLocalization();
 ```
 
-## Nasıl Çalışır
+## How It Works
 
-`LocalizationMiddleware`, her request'te `Accept-Language` header'ını okur ve `ILocalizationService.AcceptLocales`'i set eder. Header yoksa tenant'ın `DefaultLocale`'ine fallback yapar:
+On every request, `LocalizationMiddleware` reads the `Accept-Language` header and sets `ILocalizationService.AcceptLocales`. If the header is absent, it falls back to the tenant's `DefaultLocale`:
 
 ```
-// Durum 1: Client dil gönderiyor
+// Case 1: Client sends languages
 GET /api/products
 Accept-Language: tr, en;q=0.9, de;q=0.8
 → AcceptLocales = ["tr", "en", "de"]
 
-// Durum 2: Client dil göndermiyor, tenant'ın defaultLocale'i "de"
+// Case 2: Client sends no language, tenant's defaultLocale is "de"
 GET /api/products
-→ AcceptLocales = ["de"]   ← Tenant.DefaultLocale'den geldi
+→ AcceptLocales = ["de"]   ← Came from Tenant.DefaultLocale
 
-// Durum 3: Ne header ne DefaultLocale var
-→ AcceptLocales = null  ← lokalizasyon servisi kendi default'una (en) düşer
+// Case 3: Neither header nor DefaultLocale is present
+→ AcceptLocales = null  ← localization service falls back to its own default (en)
 ```
 
-## Middleware Sırası
+## Middleware Order
 
-`LocalizationMiddleware`, `ITenantContext.DefaultLocale`'i okuduğu için `UseMultiTenancy()`'den **sonra** gelmeli:
+Because `LocalizationMiddleware` reads `ITenantContext.DefaultLocale`, it must come **after** `UseMultiTenancy()`:
 
 ```csharp
 app.UseRouting();
 app.UseAuthentication();
-app.UseMultiTenancy();        // TenantContext.DefaultLocale set edilir
-app.UseResponseLocalization(); // DefaultLocale'i okur
+app.UseMultiTenancy();        // TenantContext.DefaultLocale is set
+app.UseResponseLocalization(); // Reads DefaultLocale
 app.UseAuthorization();
 app.MapControllers();
 ```
 
-Locale bilgisi request boyunca `ILocalizationService` üzerinden erişilebilir olur.
+The locale information becomes accessible throughout the request via `ILocalizationService`.

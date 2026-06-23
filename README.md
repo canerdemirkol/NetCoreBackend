@@ -67,7 +67,7 @@
 | [`Core.Translation.AmazonTranslate.DependencyInjection`](Core.Translation.AmazonTranslate.DependencyInjection/README.md) | DI registration |
 | [`Core.Outbox`](Core.Outbox/README.md) | Transactional outbox — `OutboxMessage` entity, `IOutboxStore`/`IOutboxPublisher`, `EfOutboxStore<TDbContext>` |
 | [`Core.Outbox.DependencyInjection`](Core.Outbox.DependencyInjection/README.md) | `AddOutbox<TDbContext>()` — store + `OutboxPublisherWorker` BackgroundService |
-| [`Core.Test`](Core.Test/README.md) | Test helpers (`BaseFakeData`, `MockRepositoryHelper`, `BaseMockRepository`) + framework regression suite (`dotnet test`). Test SDK refs `PrivateAssets="all"` — consumers sadece helpers'ı alır. |
+| [`Core.Test`](Core.Test/README.md) | Test helpers (`BaseFakeData`, `MockRepositoryHelper`, `BaseMockRepository`) + framework regression suite (`dotnet test`). Test SDK refs `PrivateAssets="all"` — consumers only get the helpers. |
 
 ---
 
@@ -107,13 +107,13 @@ See [AUTH.md](./AUTH.md) for the single-endpoint authentication system (server d
 
 ## Getting Started
 
-> **Tam kurulum rehberi:** [**SETUP.md**](./SETUP.md) — `appsettings.json`, `Program.cs`,
-> `DbContext`, `ITenantService`, pipeline behavior'lar ve middleware sırası dahil. Aşağıdaki
-> bölüm hızlı bir özet.
+> **Full setup guide:** [**SETUP.md**](./SETUP.md) — including `appsettings.json`, `Program.cs`,
+> `DbContext`, `ITenantService`, pipeline behaviors, and middleware ordering. The section below
+> is a quick summary.
 >
-> **Bu paketleri NuGet'e yayımlamak için:** [**NUGET-PUBLISH.md**](./NUGET-PUBLISH.md) —
-> API key, `publish-all.ps1` script'i, lokal feed ile test, versiyon yönetimi,
-> troubleshooting.
+> **To publish these packages to NuGet:** [**NUGET-PUBLISH.md**](./NUGET-PUBLISH.md) —
+> API key, the `publish-all.ps1` script, testing with a local feed, version management,
+> and troubleshooting.
 
 ### 1. Install (via project reference or NuGet)
 ```xml

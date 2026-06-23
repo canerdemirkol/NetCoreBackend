@@ -1,8 +1,8 @@
 # Core.ElasticSearch
 
-Elasticsearch (NEST client) entegrasyonu. Index yönetimi, tam metin arama ve CRUD operasyonları.
+Elasticsearch (NEST client) integration. Index management, full-text search, and CRUD operations.
 
-## Kurulum
+## Installation
 
 ```csharp
 // Program.cs
@@ -20,10 +20,10 @@ builder.Services.AddSingleton<IElasticSearch, ElasticSearchManager>();
 }
 ```
 
-## Operasyonlar
+## Operations
 
 ```csharp
-// Index oluşturma
+// Create index
 await elasticSearch.CreateNewIndexAsync(new IndexModel
 {
     IndexName = "products",
@@ -32,17 +32,17 @@ await elasticSearch.CreateNewIndexAsync(new IndexModel
     NumberOfShards = 3
 });
 
-// Doküman ekleme
+// Insert document
 await elasticSearch.InsertAsync(new ElasticSearchInsertUpdateModel
 {
     IndexName = "products",
     Item = product
 });
 
-// Toplu ekleme
+// Bulk insert
 await elasticSearch.InsertManyAsync("products", productList.Cast<object>().ToArray());
 
-// Güncelleme
+// Update
 await elasticSearch.UpdateByElasticIdAsync(new ElasticSearchInsertUpdateModel
 {
     IndexName = "products",
@@ -50,7 +50,7 @@ await elasticSearch.UpdateByElasticIdAsync(new ElasticSearchInsertUpdateModel
     Item = updatedProduct
 });
 
-// Silme
+// Delete
 await elasticSearch.DeleteByElasticIdAsync(new ElasticSearchModel
 {
     IndexName = "products",
@@ -58,14 +58,14 @@ await elasticSearch.DeleteByElasticIdAsync(new ElasticSearchModel
 });
 ```
 
-## Arama
+## Search
 
 ```csharp
-// Tüm sonuçlar (sayfalı)
+// All results (paginated)
 IList<ElasticSearchGetModel<Product>> results = await elasticSearch.GetAllSearch<Product>(
     new SearchParameters { IndexName = "products", From = 0, Size = 10 });
 
-// Field bazlı arama
+// Field-based search
 IList<ElasticSearchGetModel<Product>> results = await elasticSearch.GetSearchByField<Product>(
     new SearchByFieldParameters
     {
@@ -75,7 +75,7 @@ IList<ElasticSearchGetModel<Product>> results = await elasticSearch.GetSearchByF
         From = 0, Size = 10
     });
 
-// Basit query string arama
+// Simple query string search
 IList<ElasticSearchGetModel<Product>> results = await elasticSearch.GetSearchBySimpleQueryString<Product>(
     new SearchByQueryParameters
     {
@@ -87,14 +87,14 @@ IList<ElasticSearchGetModel<Product>> results = await elasticSearch.GetSearchByS
     });
 ```
 
-## Modeller
+## Models
 
 ```
 ElasticSearchModel              ← IndexName, ElasticId
   └── ElasticSearchInsertUpdateModel  ← + Item (object)
   └── ElasticSearchInsertManyModel    ← + Items (object[])
 
-ElasticSearchGetModel<T>        ← ElasticId + T Item (sonuçlar için)
+ElasticSearchGetModel<T>        ← ElasticId + T Item (for results)
 
 SearchParameters                ← IndexName, From, Size
   └── SearchByFieldParameters   ← + FieldName, Value

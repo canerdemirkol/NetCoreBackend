@@ -16,8 +16,6 @@
 		<!-- MailKit -->
 		<PackageVersion Include="MailKit" Version="4.17.0" />
 		<PackageVersion Include="MimeKit" Version="4.17.0" />
-		<!-- MediatR -->
-		<PackageVersion Include="MediatR" Version="14.0.0" />
 		<!-- Microsoft AspNetCore -->
 		<!-- HTTP / MVC types come from <FrameworkReference Include="Microsoft.AspNetCore.App" />
 		     in libraries that need them. The legacy 2.3.0 standalone packages are deprecated

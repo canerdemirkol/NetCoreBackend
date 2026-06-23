@@ -1,35 +1,38 @@
 <#
 .SYNOPSIS
-    Bütün Core.* class library'lerini NuGet.org'a yayımlar (Core.Test hariç).
+    Publishes every Core.* class library to NuGet.org (except Core.Test).
 
 .DESCRIPTION
-    1. Release config'le solution'ı build eder.
-    2. Bütün paketlenebilir projeleri ./nupkgs altında pack eder.
-    3. Core.Test*'i filtreler (paketlenmiyor zaten ama defansif filter).
-    4. Her .nupkg'yi NuGet.org'a tek tek push eder.
-    --skip-duplicate kullanır → aynı version varsa hata değil, atlanır.
+    1. Builds the solution in Release configuration.
+    2. Packs every packable project into ./nupkgs.
+    3. Filters out Core.Test* (it is not packable anyway, but this is a defensive filter).
+    4. Pushes each .nupkg to NuGet.org one by one.
+    Uses --skip-duplicate → an already-published version is skipped, not treated as an error.
+
+    NOTE: packing targets the whole solution (dotnet pack NetCoreBackend.sln), so any
+    project added to the solution (e.g. Core.Mediation) is packed and pushed automatically —
+    there is no per-package list to maintain here.
 
 .PARAMETER ApiKey
-    NuGet.org API key. Verilmezse $env:NUGET_API_KEY okunur.
+    NuGet.org API key. If omitted, $env:NUGET_API_KEY is read.
 
 .PARAMETER Source
     Push target feed. Default: https://api.nuget.org/v3/index.json
-    Lokal test için: C:\local-nuget-feed gibi bir klasör verebilirsin.
+    For local testing you can pass a folder such as C:\local-nuget-feed.
 
 .PARAMETER DryRun
-    Sadece pack eder, push ETMEZ. NuGet'e bir şey gönderilmeden önce paketleri
-    incelemek için.
+    Packs only, does NOT push. Use it to inspect the packages before sending anything to NuGet.
 
 .EXAMPLE
     $env:NUGET_API_KEY = "oy2x..."
     ./publish-all.ps1
 
 .EXAMPLE
-    # Lokal feed'e yayımla (test için)
+    # Publish to a local feed (for testing)
     ./publish-all.ps1 -Source "C:\local-nuget-feed"
 
 .EXAMPLE
-    # Sadece pack, push yok — paketleri kontrol et
+    # Pack only, no push — inspect the packages
     ./publish-all.ps1 -DryRun
 #>
 
@@ -46,47 +49,47 @@ $ErrorActionPreference = "Stop"
 # 0. Sanity check
 if (-not $DryRun -and -not $Source.StartsWith("C:") -and -not $Source.StartsWith("/")) {
     if ([string]::IsNullOrWhiteSpace($ApiKey)) {
-        throw "API key gerekli. Ya -ApiKey parametresi ver ya da `$env:NUGET_API_KEY set et."
+        throw "API key required. Either pass -ApiKey or set `$env:NUGET_API_KEY."
     }
 }
 
 # 1. Clean output
 if (Test-Path $OutputDir) {
-    Write-Host "Eski paketleri temizle: $OutputDir" -ForegroundColor DarkGray
+    Write-Host "Cleaning old packages: $OutputDir" -ForegroundColor DarkGray
     Remove-Item $OutputDir -Recurse -Force
 }
 
-# 2. Build (tüm solution release config)
+# 2. Build (whole solution, Release configuration)
 Write-Host "`n=== BUILD ($Configuration) ===" -ForegroundColor Cyan
 dotnet build NetCoreBackend.sln -c $Configuration --nologo
-if ($LASTEXITCODE -ne 0) { throw "Build başarısız" }
+if ($LASTEXITCODE -ne 0) { throw "Build failed" }
 
-# 3. Pack (tüm packable projeler → ./nupkgs)
-#    Core.Test'in csproj'ında <IsPackable>false</IsPackable> var → dotnet pack
-#    onu otomatik atlar; ayrıca aşağıda defansif filter de var.
+# 3. Pack (all packable projects → ./nupkgs)
+#    Core.Test has <IsPackable>false</IsPackable> in its csproj, so dotnet pack skips it
+#    automatically; the defensive filter below is a second guard.
 Write-Host "`n=== PACK ===" -ForegroundColor Cyan
 dotnet pack NetCoreBackend.sln -c $Configuration -o $OutputDir --no-build --nologo
-if ($LASTEXITCODE -ne 0) { throw "Pack başarısız" }
+if ($LASTEXITCODE -ne 0) { throw "Pack failed" }
 
-# 4. Paketleri listele + Core.Test'i filtrele (defansif)
+# 4. List packages + filter out Core.Test (defensive)
 $packages = Get-ChildItem $OutputDir -Filter "*.nupkg" |
     Where-Object { $_.Name -notmatch "Core\.Test\." } |
     Sort-Object Name
 
-# Symbol package'ları (.snupkg) push sırasında dotnet otomatik handle ediyor;
-# aynı klasörde .nupkg ile .snupkg yan yana olduğunda push komutu ikisini birden yollar.
+# Symbol packages (.snupkg) are handled automatically by dotnet during push;
+# when a .nupkg and its .snupkg sit side by side, the push command sends both.
 $snupkgCount = (Get-ChildItem $OutputDir -Filter "*.snupkg" | Where-Object { $_.Name -notmatch "Core\.Test\." }).Count
 
-Write-Host "`nPaketlenen $($packages.Count) library + $snupkgCount symbol package:" -ForegroundColor Green
+Write-Host "`nPacked $($packages.Count) libraries + $snupkgCount symbol packages:" -ForegroundColor Green
 $packages | ForEach-Object { Write-Host "  $($_.Name)" -ForegroundColor DarkGray }
 
 if ($DryRun) {
-    Write-Host "`n[DRY RUN] Push atlandı. Paketler $OutputDir altında." -ForegroundColor Yellow
+    Write-Host "`n[DRY RUN] Push skipped. Packages are under $OutputDir." -ForegroundColor Yellow
     exit 0
 }
 
-# 5. Push — tek tek, sıralı (paralel için ForEach-Object -Parallel ekleyebilirsin,
-#    ama 28 paketin push'u zaten ~1-2 dk; serial debug için daha kolay)
+# 5. Push — one by one, sequentially (you could add ForEach-Object -Parallel,
+#    but pushing all packages takes ~1-2 min; serial is easier to debug)
 Write-Host "`n=== PUSH → $Source ===" -ForegroundColor Cyan
 $failed = @()
 foreach ($pkg in $packages) {
@@ -97,25 +100,25 @@ foreach ($pkg in $packages) {
             --source $Source `
             --skip-duplicate
     } else {
-        # Lokal feed: API key gerekmez
+        # Local feed: no API key needed
         dotnet nuget push $pkg.FullName `
             --source $Source `
             --skip-duplicate
     }
     if ($LASTEXITCODE -ne 0) {
-        Write-Warning "Push BAŞARISIZ: $($pkg.Name)"
+        Write-Warning "Push FAILED: $($pkg.Name)"
         $failed += $pkg.Name
     }
 }
 
-# 6. Özet
-Write-Host "`n=== ÖZET ===" -ForegroundColor Cyan
+# 6. Summary
+Write-Host "`n=== SUMMARY ===" -ForegroundColor Cyan
 $pushed = $packages.Count - $failed.Count
-Write-Host "Başarılı push: $pushed / $($packages.Count)" -ForegroundColor Green
+Write-Host "Pushed successfully: $pushed / $($packages.Count)" -ForegroundColor Green
 if ($failed.Count -gt 0) {
-    Write-Host "Başarısız: $($failed.Count)" -ForegroundColor Red
+    Write-Host "Failed: $($failed.Count)" -ForegroundColor Red
     $failed | ForEach-Object { Write-Host "  ✗ $_" -ForegroundColor Red }
     exit 1
 }
 
-Write-Host "`nNuGet feed'de görünmesi 5-15 dakika sürebilir (indexing)." -ForegroundColor DarkGray
+Write-Host "`nIt can take 5-15 minutes to appear on the NuGet feed (indexing)." -ForegroundColor DarkGray

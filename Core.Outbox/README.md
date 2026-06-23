@@ -1,14 +1,14 @@
 # Core.Outbox
 
-**Transactional Outbox** pattern implementasyonu. Atomik DB-write + event publish'i tek bir transaction'da kilitler. Distributed event göndermek için "publish ile DB-commit arasında crash olursa ne olur?" sorusunu çözer.
+Implementation of the **Transactional Outbox** pattern. Locks the atomic DB write + event publish into a single transaction. For sending distributed events, it solves the question "what happens if a crash occurs between publish and DB commit?".
 
-> **TL;DR:** RabbitMQ / Kafka / SNS gibi dış sistemlere event gönderiyorsan, "DB commit OK ama event publish FAIL" senaryosu sistemini kalıcı inconsistent state'e sokar. Outbox bu senaryoyu imkânsız kılar.
+> **TL;DR:** If you send events to external systems such as RabbitMQ / Kafka / SNS, the "DB commit OK but event publish FAIL" scenario puts your system into a permanently inconsistent state. The Outbox makes this scenario impossible.
 
 ---
 
-## 1. Çözülen problem
+## 1. The problem it solves
 
-### ❌ Klasik kırık pattern
+### ❌ The classic broken pattern
 
 ```csharp
 public async Task PlaceOrderAsync(Order order, CancellationToken ct)
@@ -16,28 +16,28 @@ public async Task PlaceOrderAsync(Order order, CancellationToken ct)
     _db.Orders.Add(order);
     await _db.SaveChangesAsync(ct);              // 1. DB commit OK
 
-    // ⚠️ Bu satırda crash olursa (network glitch, container OOM kill, process restart):
-    //    - DB'de order var
-    //    - RabbitMQ'ya event GİTMEDİ
-    //    - Inventory service "OrderPlaced" haberini hiç almıyor
-    //    - Sistem kalıcı inconsistent state'te → manuel reconciliation gerekir
+    // ⚠️ If a crash occurs on this line (network glitch, container OOM kill, process restart):
+    //    - The order is in the DB
+    //    - The event was NOT sent to RabbitMQ
+    //    - The Inventory service never receives the "OrderPlaced" notification
+    //    - The system is in a permanently inconsistent state → manual reconciliation is required
     await _rabbit.PublishAsync(new OrderPlacedEvent(order.Id), ct);
 }
 ```
 
-Tersini denersen (önce publish, sonra DB) bu sefer:
-- Publish OK ama DB commit fail → consumer'lar olmayan order'a tepki verir → `OrderNotFound` exception fırtınası
+If you try the reverse (publish first, then DB), this time:
+- Publish OK but DB commit fails → consumers react to a nonexistent order → a storm of `OrderNotFound` exceptions
 
-`try/catch + retry` ile düzeltmeye çalışmak da çözüm değil: process tamamen ölürse retry mantığı bile çalışmaz.
+Trying to fix it with `try/catch + retry` is not a solution either: if the process dies entirely, even the retry logic won't run.
 
-### ✅ Outbox çözümü
+### ✅ The Outbox solution
 
 ```csharp
 public async Task PlaceOrderAsync(Order order, CancellationToken ct)
 {
     _db.Orders.Add(order);
 
-    // Outbox satırı DA aynı DbContext'e eklenir → tek transaction
+    // The outbox row is ALSO added to the same DbContext → a single transaction
     await _outbox.AppendAsync(new OutboxMessage
     {
         Id            = Guid.NewGuid(),
@@ -51,17 +51,17 @@ public async Task PlaceOrderAsync(Order order, CancellationToken ct)
 }
 ```
 
-Sonra arka planda `OutboxPublisherWorker` outbox tablosunu polling eder ve consumer'ın yazdığı `IOutboxPublisher`'a teslim eder. Üç senaryo:
+Then, in the background, `OutboxPublisherWorker` polls the outbox table and delivers it to the `IOutboxPublisher` written by the consumer. Three scenarios:
 
-| Senaryo | Sonuç |
+| Scenario | Result |
 |---|---|
-| DB commit'ten önce crash | İkisi de yazılmaz → kullanıcı 500 alır, retry eder, no inconsistency |
-| Commit OK, sonra crash | Outbox satırı persist'tir → worker restart olunca yakalar, RabbitMQ'ya yollar, `ProcessedAtUtc` stamp'ler |
-| RabbitMQ down | Worker fail eder, `AttemptCount++`, exponential backoff ile retry, `MaxAttempts` aşılırsa `IsPoisoned = true` → operator inceler. **Event kaybı yok.** |
+| Crash before DB commit | Neither is written → the user gets a 500, retries, no inconsistency |
+| Commit OK, then crash | The outbox row is persisted → when the worker restarts it picks it up, sends it to RabbitMQ, and stamps `ProcessedAtUtc` |
+| RabbitMQ down | The worker fails, `AttemptCount++`, retries with exponential backoff, and if `MaxAttempts` is exceeded `IsPoisoned = true` → an operator investigates. **No event loss.** |
 
 ---
 
-## 2. Akış diyagramı
+## 2. Flow diagram
 
 ```
 ┌─────────────────────────────┐
@@ -95,15 +95,15 @@ Sonra arka planda `OutboxPublisherWorker` outbox tablosunu polling eder ve consu
                                │  (consumer impl)     │
                                │   → RabbitMQ /       │
                                │     Kafka / SNS /    │
-                               │     MediatR / vb.    │
+                               │     MediatR / etc.   │
                                └──────────────────────┘
 ```
 
 ---
 
-## 3. Tam kurulum — Order servisi örneği
+## 3. Full setup — Order service example
 
-### 3.1 DbContext'e outbox tablosunu ekle
+### 3.1 Add the outbox table to the DbContext
 
 ```csharp
 using Microsoft.EntityFrameworkCore;
@@ -121,24 +121,24 @@ public class AppDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
-        // Outbox tablosu + dispatch index'i (hot-path polling için filtered index)
+        // Outbox table + dispatch index (a filtered index for hot-path polling)
         modelBuilder.ConfigureOutbox();
 
-        // ... senin diğer entity konfigürasyonların
+        // ... your other entity configurations
     }
 }
 ```
 
-Migration ekle:
+Add a migration:
 
 ```bash
 dotnet ef migrations add AddOutbox
 dotnet ef database update
 ```
 
-### 3.2 RabbitMQ publisher'ı yaz
+### 3.2 Write the RabbitMQ publisher
 
-> Framework `IOutboxPublisher`'ı **boş bırakıyor** — çünkü her consumer farklı broker / topic / serializer kullanır. Sen kendi şirketinin konvansiyonuna uygun şekilde implement edersin.
+> The framework **leaves `IOutboxPublisher` empty** — because every consumer uses a different broker / topic / serializer. You implement it according to your own company's conventions.
 
 ```csharp
 using System.Text;
@@ -162,8 +162,8 @@ public sealed class RabbitMqOutboxPublisher : IOutboxPublisher, IAsyncDisposable
     {
         await using IChannel channel = await _connection.CreateChannelAsync(cancellationToken: cancellationToken);
 
-        // Routing key olarak EventType kullan — "Orders.Placed.v1" → topic.* binding'lerine
-        // göre tüketici servislere dağıtılır.
+        // Use EventType as the routing key — "Orders.Placed.v1" → distributed to consumer
+        // services according to topic.* bindings.
         BasicProperties props = new()
         {
             MessageId     = message.Id.ToString(),
@@ -171,7 +171,7 @@ public sealed class RabbitMqOutboxPublisher : IOutboxPublisher, IAsyncDisposable
             ContentType   = "application/json",
             Type          = message.EventType,
             Timestamp     = new AmqpTimestamp(new DateTimeOffset(message.OccurredAtUtc).ToUnixTimeSeconds()),
-            Persistent    = true  // disk-backed → broker restart'ında kaybolmaz
+            Persistent    = true  // disk-backed → not lost on a broker restart
         };
 
         await channel.BasicPublishAsync(
@@ -182,8 +182,8 @@ public sealed class RabbitMqOutboxPublisher : IOutboxPublisher, IAsyncDisposable
             body:        Encoding.UTF8.GetBytes(message.Payload),
             cancellationToken: cancellationToken);
 
-        // Burada throw atarsan OutboxPublisherWorker yakalar, AttemptCount++,
-        // exponential backoff ile retry eder. Atmazsan MarkProcessedAsync çağrılır.
+        // If you throw here, OutboxPublisherWorker catches it, AttemptCount++,
+        // and retries with exponential backoff. If you don't throw, MarkProcessedAsync is called.
     }
 
     public async ValueTask DisposeAsync()
@@ -202,18 +202,18 @@ using RabbitMQ.Client;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. DbContext (SQL Server / Postgres / vb.)
+// 1. DbContext (SQL Server / Postgres / etc.)
 builder.Services.AddDbContext<AppDbContext>(opt =>
     opt.UseSqlServer(builder.Configuration.GetConnectionString("AppDb")));
 
-// 2. Multi-tenancy — multi-tenant SaaS senaryosunda ZORUNLU. AddOutbox'tan önce gelmeli;
-// EfOutboxStore.AppendAsync TenantId stamp'i için ITenantEntitySetter resolve eder.
-// Setter yoksa + msg.TenantId boşsa append loud error fırlatır (orphan row yok).
+// 2. Multi-tenancy — REQUIRED in a multi-tenant SaaS scenario. Must come before AddOutbox;
+// EfOutboxStore.AppendAsync resolves ITenantEntitySetter to stamp the TenantId.
+// If there is no setter + msg.TenantId is empty, append throws a loud error (no orphan row).
 builder.Services.AddMultiTenancy();
 
 // 3. Outbox store + worker.
-// OutboxOptions startup'ta ValidateOnStart() ile Validate() çağırır —
-// BatchSize=0 / MaxRetryDelay<BaseRetryDelay gibi misconfiguration host build'te fail eder.
+// OutboxOptions calls Validate() at startup via ValidateOnStart() —
+// misconfigurations such as BatchSize=0 / MaxRetryDelay<BaseRetryDelay fail the host build.
 builder.Services.AddOutbox<AppDbContext>(opt =>
 {
     opt.BatchSize      = 100;
@@ -223,7 +223,7 @@ builder.Services.AddOutbox<AppDbContext>(opt =>
     opt.MaxRetryDelay  = TimeSpan.FromMinutes(10);
 });
 
-// 4. RabbitMQ connection — Singleton (connection pahalı, channel ucuz)
+// 4. RabbitMQ connection — Singleton (connection is expensive, channel is cheap)
 builder.Services.AddSingleton<IConnection>(sp =>
 {
     var factory = new ConnectionFactory
@@ -235,14 +235,14 @@ builder.Services.AddSingleton<IConnection>(sp =>
     return factory.CreateConnectionAsync().GetAwaiter().GetResult();
 });
 
-// 5. Senin publisher — Scoped (worker her batch için yeni scope açar)
+// 5. Your publisher — Scoped (the worker opens a new scope for each batch)
 builder.Services.AddScoped<IOutboxPublisher, RabbitMqOutboxPublisher>();
 
 var app = builder.Build();
 app.Run();
 ```
 
-### 3.4 Handler içinde kullanım
+### 3.4 Usage inside the handler
 
 ```csharp
 public sealed class PlaceOrderHandler : IRequestHandler<PlaceOrderCommand, Guid>
@@ -283,7 +283,7 @@ public sealed class PlaceOrderHandler : IRequestHandler<PlaceOrderCommand, Guid>
             OccurredAtUtc = DateTime.UtcNow
         }, ct);
 
-        // ATOMIC: order + outbox row tek transaction'da. Crash olursa ikisi de gitmez.
+        // ATOMIC: order + outbox row in a single transaction. If a crash occurs, neither is committed.
         await _db.SaveChangesAsync(ct);
 
         return order.Id;
@@ -291,29 +291,29 @@ public sealed class PlaceOrderHandler : IRequestHandler<PlaceOrderCommand, Guid>
 }
 ```
 
-> **Önemli:** `AppendAsync` çağrısı `SaveChanges` etmiyor — sadece DbContext'e ekliyor. Atomicity'i `SaveChangesAsync` sağlar. Eğer `TransactionScopeBehavior` (Core.Application pipeline) kullanıyorsan otomatik transaction da iş görür.
+> **Important:** The `AppendAsync` call does not `SaveChanges` — it only adds to the DbContext. `SaveChangesAsync` provides the atomicity. If you use `TransactionScopeBehavior` (the Core.Application pipeline), the automatic transaction also does the job.
 
 ---
 
 ## 4. Components
 
-| Type | Rol |
+| Type | Role |
 |---|---|
 | `OutboxMessage` | `TenantEntity<Guid>` — `EventType`, `Payload`, `CorrelationId`, retry bookkeeping (`AttemptCount`, `NextAttemptUtc`, `IsPoisoned`, `Error`) |
-| `IOutboxStore` | Storage soyutlaması — `AppendAsync`, `FetchDueAsync`, `MarkProcessedAsync`, `RecordFailureAsync` |
-| `EfOutboxStore<TDbContext>` | EF Core implementasyonu — consumer DbContext üzerine binili, **default scoped impl** |
-| `IOutboxPublisher` | **Consumer implementer** — gerçek event'i broker'a shipping eden tek interface |
+| `IOutboxStore` | Storage abstraction — `AppendAsync`, `FetchDueAsync`, `MarkProcessedAsync`, `RecordFailureAsync` |
+| `EfOutboxStore<TDbContext>` | EF Core implementation — bound to the consumer DbContext, **default scoped impl** |
+| `IOutboxPublisher` | **Consumer implementer** — the only interface that ships the actual event to the broker |
 | `OutboxPublisherWorker` | `BackgroundService` — polling + retry + poison-pill handling + per-message failure isolation |
 | `OutboxOptions` | `BatchSize` / `IdlePollDelay` / `MaxAttempts` / `BaseRetryDelay` / `MaxRetryDelay` |
-| `ConfigureOutbox()` | `ModelBuilder` extension — outbox tablosu + filtered dispatch index |
+| `ConfigureOutbox()` | `ModelBuilder` extension — outbox table + filtered dispatch index |
 
 ---
 
 ## 5. Retry policy
 
-Exponential backoff: `attempt n → BaseRetryDelay × 2^(n-1)`, `MaxRetryDelay` ile cap'li.
+Exponential backoff: `attempt n → BaseRetryDelay × 2^(n-1)`, capped by `MaxRetryDelay`.
 
-Default ayarlarla (`BaseRetryDelay=2s`, `MaxAttempts=8`, `MaxRetryDelay=10m`) program:
+With the default settings (`BaseRetryDelay=2s`, `MaxAttempts=8`, `MaxRetryDelay=10m`) the schedule is:
 
 | Attempt | Delay |
 |---|---|
@@ -325,17 +325,17 @@ Default ayarlarla (`BaseRetryDelay=2s`, `MaxAttempts=8`, `MaxRetryDelay=10m`) pr
 | 6 | 1m 4s |
 | 7 | 2m 8s |
 | 8 | 4m 16s |
-| 9 | **POISONED** (`IsPoisoned = true`, dispatch durur, operator inceler) |
+| 9 | **POISONED** (`IsPoisoned = true`, dispatch stops, an operator investigates) |
 
 ---
 
 ## 6. Failure isolation
 
-`OutboxPublisherWorker` üç katman koruma kullanır:
+`OutboxPublisherWorker` uses three layers of protection:
 
-1. **Per-message try/catch** — bir mesajın `PublishAsync`'te throw atması batch'in geri kalanını etkilemez; sadece o satırın retry counter'ı artar.
-2. **Batch-level try/catch** — `FetchDueAsync` wholesale fail ederse (DB outage), worker log'lar ve `IdlePollDelay` kadar bekleyip yeniden dener. CPU spin yok.
-3. **Cancellation respect** — `OperationCanceledException` host shutdown'ı temsil eder; mesaj penalize edilmez, sıradaki worker run'da yeniden fetch edilir.
+1. **Per-message try/catch** — a message throwing in `PublishAsync` does not affect the rest of the batch; only that row's retry counter is incremented.
+2. **Batch-level try/catch** — if `FetchDueAsync` fails wholesale (DB outage), the worker logs, waits for `IdlePollDelay`, and retries. No CPU spin.
+3. **Cancellation respect** — `OperationCanceledException` represents host shutdown; the message is not penalized and is re-fetched on the next worker run.
 
 ---
 
@@ -363,94 +363,94 @@ ExecuteAsync loop:
 Host stop → ExecuteAsync exits gracefully
 ```
 
-Her batch için **yeni DI scope** açılır — DbContext per-batch tracker state'i biriktirmez, `IOutboxPublisher`'ın scoped dependency'leri (RabbitMQ channel gibi) düzgün dispose olur.
+A **new DI scope** is opened for each batch — the DbContext does not accumulate per-batch tracker state, and the `IOutboxPublisher`'s scoped dependencies (such as the RabbitMQ channel) are disposed properly.
 
 ---
 
-## 7.1 Horizontal scaling — bilinen sınırlama
+## 7.1 Horizontal scaling — known limitation
 
-`OutboxPublisherWorker` **tek replica** çalışacak şekilde tasarlandı. Birden çok replica aynı anda `FetchDueAsync` çağırırsa **aynı row'u iki kez** publish edebilir (pessimistic lock / `FOR UPDATE SKIP LOCKED` framework'te yok — provider-specific).
+`OutboxPublisherWorker` is designed to run as a **single replica**. If multiple replicas call `FetchDueAsync` at the same time, they may publish **the same row twice** (a pessimistic lock / `FOR UPDATE SKIP LOCKED` is not in the framework — it is provider-specific).
 
-### Pratik çözümler
+### Practical solutions
 
-| Yaklaşım | Açıklama |
+| Approach | Description |
 |---|---|
-| **Tek replica** (önerilen) | K8s `Deployment.replicas: 1` veya bir tek BackgroundService host'u. Worker zaten cheap (polling-based), throughput için **`BatchSize` artırmak** çoğu zaman replicas çoğaltmaktan iyi sonuç verir. |
-| **Leader election** | Birden çok host varsa, sadece "leader" worker'ın çalışmasına izin ver (ZooKeeper / Consul / Redis lock). Worker'a `IHostedService` koşulu ekleyip lock alamayan instance hemen exit eder. |
-| **Custom store + FOR UPDATE SKIP LOCKED** | `IOutboxStore`'u kendi raw-SQL implementasyonunla değiştir; Postgres/MySQL/SQL Server için `SELECT … FOR UPDATE SKIP LOCKED` ile multiple worker safe consume sağlar. |
-| **Idempotent consumer** | Publisher'ın throw atmadığı ama mesajın çift teslim edildiği senaryoda consumer tarafında idempotency key kontrolü zaten varsa, duplicate publish veri açısından zararsız olur. |
+| **Single replica** (recommended) | K8s `Deployment.replicas: 1` or a single BackgroundService host. The worker is already cheap (polling-based); for throughput, **increasing `BatchSize`** usually yields better results than scaling up replicas. |
+| **Leader election** | If there are multiple hosts, allow only the "leader" worker to run (ZooKeeper / Consul / Redis lock). Add an `IHostedService` condition to the worker so that an instance that cannot acquire the lock exits immediately. |
+| **Custom store + FOR UPDATE SKIP LOCKED** | Replace `IOutboxStore` with your own raw-SQL implementation; for Postgres/MySQL/SQL Server, `SELECT … FOR UPDATE SKIP LOCKED` enables safe consumption by multiple workers. |
+| **Idempotent consumer** | In a scenario where the publisher does not throw but the message is delivered twice, if the consumer side already has an idempotency key check, a duplicate publish is harmless data-wise. |
 
-> Default kurulum (tek replica) çoğu SaaS için yeterli — outbox iş yükü typically saniyede yüzlerce mesaj seviyesindedir, batch=100 ile rahatlıkla karşılanır.
+> The default setup (single replica) is sufficient for most SaaS — the outbox workload is typically on the order of hundreds of messages per second, which batch=100 handles comfortably.
 
 ---
 
-## 7.2 Multi-tenant semantik
+## 7.2 Multi-tenant semantics
 
-Outbox `TenantEntity` — her satır `TenantId`'ye bağlı, ama iki path **farklı** davranır:
+The Outbox is a `TenantEntity` — every row is bound to a `TenantId`, but the two paths behave **differently**:
 
 ### Write path (handler → AppendAsync)
 
-`AppendAsync` `TenantId == Guid.Empty` ise mevcut `ITenantEntitySetter`'dan stamp eder. Tipik akış:
+If `TenantId == Guid.Empty`, `AppendAsync` stamps it from the current `ITenantEntitySetter`. Typical flow:
 
 ```
 Request → TenantMiddleware → TenantContext.SetTenant(tenantA)
-   → PlaceOrderHandler → _outbox.AppendAsync(msg)   // msg.TenantId boş
-   → EfOutboxStore stamp eder: msg.TenantId = tenantA
+   → PlaceOrderHandler → _outbox.AppendAsync(msg)   // msg.TenantId empty
+   → EfOutboxStore stamps it: msg.TenantId = tenantA
    → SaveChangesAsync atomic commit
 ```
 
-Tenant context yoksa + `ITenantEntitySetter` register edilmemişse **loud error** — orphan row asla yazılmaz.
+If there is no tenant context + `ITenantEntitySetter` is not registered, a **loud error** is thrown — an orphan row is never written.
 
 ### Read path (worker → FetchDueAsync)
 
-`OutboxPublisherWorker` `BackgroundService`'tir. HttpContext yok, TenantMiddleware çalışmamış, tenant context boş. **Worker by-design cross-tenant** — tüm tenant'ların outbox'ını drain etmeli, yoksa hiç event ship'lenmez.
+`OutboxPublisherWorker` is a `BackgroundService`. There is no HttpContext, TenantMiddleware has not run, and the tenant context is empty. **The worker is cross-tenant by design** — it must drain the outbox of all tenants, otherwise no events are shipped at all.
 
-Bu yüzden `FetchDueAsync` `IgnoreQueryFilters()` çağırır. Consumer'ın `DbContext`'inde `OutboxMessage` üzerinde tenant query filter olsa bile worker tüm satırları görür.
+That is why `FetchDueAsync` calls `IgnoreQueryFilters()`. Even if the consumer's `DbContext` has a tenant query filter on `OutboxMessage`, the worker sees all rows.
 
-> **Per-tenant routing istiyorsan** `IOutboxPublisher.PublishAsync` içinde `message.TenantId`'yi okuyup tenant-specific topic/queue'ya yönlendirebilirsin — TenantId payload'a yazılmasa bile entity'de mevcut.
+> **If you want per-tenant routing**, you can read `message.TenantId` inside `IOutboxPublisher.PublishAsync` and route to a tenant-specific topic/queue — even if TenantId is not written to the payload, it is present on the entity.
 
-### Özet kontrat
+### Contract summary
 
-| Path | Tenant context lazım mı? | Filter davranışı |
+| Path | Tenant context required? | Filter behavior |
 |---|---|---|
-| `AppendAsync` | Evet — TenantSetter'dan stamp ya da `msg.TenantId` explicit set | — |
-| `FetchDueAsync` | Hayır — worker tüm tenant'ları görür | `IgnoreQueryFilters()` |
-| `MarkProcessedAsync` / `RecordFailureAsync` | Hayır — entity zaten tracker'da, sadece SaveChanges | — |
+| `AppendAsync` | Yes — stamp from TenantSetter or set `msg.TenantId` explicitly | — |
+| `FetchDueAsync` | No — the worker sees all tenants | `IgnoreQueryFilters()` |
+| `MarkProcessedAsync` / `RecordFailureAsync` | No — the entity is already in the tracker, just SaveChanges | — |
 
 ---
 
-## 7.3 DbContext isolation — bilinen sınırlama
+## 7.3 DbContext isolation — known limitation
 
-`EfOutboxStore.MarkProcessedAsync` ve `RecordFailureAsync` `SaveChangesAsync` çağırır — bu **DbContext'teki TÜM tracked değişiklikleri** commit eder, sadece outbox row'unu değil.
+`EfOutboxStore.MarkProcessedAsync` and `RecordFailureAsync` call `SaveChangesAsync` — this commits **ALL tracked changes in the DbContext**, not just the outbox row.
 
-- **Worker yolu güvenli**: `OutboxPublisherWorker` her batch için fresh DI scope açar → DbContext sadece outbox row'larını tracker'da tutar. ✅
-- **Consumer dikkat etmeli**: `IOutboxStore`'u request-scoped DbContext üzerinden başka bir handler'dan kullanıyorsan, `SaveChangesAsync` request'te tracked olan diğer entity'leri de commit edebilir.
+- **The worker path is safe**: `OutboxPublisherWorker` opens a fresh DI scope for each batch → the DbContext keeps only outbox rows in the tracker. ✅
+- **The consumer must be careful**: if you use `IOutboxStore` from another handler over a request-scoped DbContext, `SaveChangesAsync` may also commit other entities tracked in the request.
 
-**Pratik öneri:** `IOutboxStore`'u sadece `AppendAsync` için kullan; `MarkProcessed/RecordFailure`'ı worker'a bırak. `AppendAsync` zaten `SaveChangesAsync` çağırmıyor — sadece DbContext'e Add ediyor, atomicity'i caller'ın transaction'ı sağlıyor.
+**Practical recommendation:** Use `IOutboxStore` only for `AppendAsync`; leave `MarkProcessed/RecordFailure` to the worker. `AppendAsync` does not call `SaveChangesAsync` anyway — it only Adds to the DbContext, and the caller's transaction provides the atomicity.
 
 ---
 
-## 8. Sana ne zaman lazım?
+## 8. When do you need it?
 
-| Senaryo | Outbox lazım mı? |
+| Scenario | Is the Outbox needed? |
 |---|---|
-| Microservices arası event-driven iletişim (RabbitMQ / Kafka / SNS / Azure Service Bus) | ✅ **Kesinlikle** |
-| Webhook gönderimi (Stripe-style: kendi consumer'larına notify) | ✅ Evet |
-| Email/SMS notification — "user kaydını commit edince mail at" | ✅ Evet |
-| Search index sync (PostgreSQL'e yaz → Elasticsearch'e index) | ✅ Evet |
-| Audit log shipping (external SIEM'e) | ✅ Evet |
-| Sadece monolith, dış sistem yok, in-process MediatR notification | ❌ Gereksiz — direkt `INotificationPublisher` yeterli |
-| "Best-effort" yeterli, event kaybı tolere ediliyor | ⚠️ Belki — basit `_broker.PublishAsync` da iş görür |
+| Event-driven communication between microservices (RabbitMQ / Kafka / SNS / Azure Service Bus) | ✅ **Absolutely** |
+| Sending webhooks (Stripe-style: notify your own consumers) | ✅ Yes |
+| Email/SMS notification — "send mail when the user registration is committed" | ✅ Yes |
+| Search index sync (write to PostgreSQL → index into Elasticsearch) | ✅ Yes |
+| Audit log shipping (to an external SIEM) | ✅ Yes |
+| Monolith only, no external system, in-process MediatR notification | ❌ Unnecessary — `INotificationPublisher` directly is enough |
+| "Best-effort" is sufficient, event loss is tolerated | ⚠️ Maybe — a simple `_broker.PublishAsync` will also do the job |
 
 ---
 
-## 9. Konfigürasyon
+## 9. Configuration
 
-Tam appsettings + connection string örneği için bkz. **[SETUP.md → Outbox & RabbitMQ Configuration](../SETUP.md#12-outbox--rabbitmq-configuration)**.
+For a full appsettings + connection string example, see **[SETUP.md → Outbox & RabbitMQ Configuration](../SETUP.md#12-outbox--rabbitmq-configuration)**.
 
 ---
 
-## 10. İlgili dosyalar
+## 10. Related files
 
 - `Entities/OutboxMessage.cs`
 - `Abstractions/IOutboxStore.cs`, `Abstractions/IOutboxPublisher.cs`

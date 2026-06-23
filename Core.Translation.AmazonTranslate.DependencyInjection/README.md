@@ -1,8 +1,8 @@
 # Core.Translation.AmazonTranslate.DependencyInjection
 
-AWS Translate servisini DI container'a kaydeden extension metot.
+Extension method that registers the AWS Translate service in the DI container.
 
-## Kurulum
+## Installation
 
 ```csharp
 // Program.cs
@@ -13,12 +13,12 @@ var amazonConfig = builder.Configuration
 builder.Services.AddAmazonTranslation(amazonConfig);
 ```
 
-`AddAmazonTranslation`, `AmazonTranslateLocalizationManager`'ı `ITranslationService` olarak **transient** kaydeder.
+`AddAmazonTranslation` registers `AmazonTranslateLocalizationManager` as `ITranslationService` with a **transient** lifetime.
 
-## Tam Lokalizasyon Entegrasyonu
+## Full Localization Integration
 
 ```csharp
-// YAML lokalizasyon yerine AWS Translate ile dinamik çeviri
+// Dynamic translation with AWS Translate instead of YAML localization
 builder.Services.AddAmazonTranslation(amazonConfig);
 builder.Services.AddScoped<ILocalizationService, TranslateLocalizationManager>();
 

@@ -1,27 +1,27 @@
 # Core.CrossCuttingConcerns.Logging
 
-Logging veri modelleri. Logger implementasyonlarından bağımsız, saf model katmanı.
+Logging data models. A pure model layer, independent of logger implementations.
 
-## Modeller
+## Models
 
 ### LogDetail
 
-MediatR `LoggingBehavior` tarafından her request için oluşturulan log kaydı:
+The log record created for each request by the MediatR `LoggingBehavior`:
 
 ```csharp
 public class LogDetail
 {
-    public string FullName { get; set; }       // Handler sınıf adı
-    public string MethodName { get; set; }     // Method adı
-    public string User { get; set; }           // Kullanıcı adı veya "?"
+    public string FullName { get; set; }       // Handler class name
+    public string MethodName { get; set; }     // Method name
+    public string User { get; set; }           // User name or "?"
     public string? TenantId { get; set; }      // Tenant Guid (multi-tenant)
-    public List<LogParameter> Parameters { get; set; }  // Request parametreleri
+    public List<LogParameter> Parameters { get; set; }  // Request parameters
 }
 ```
 
 ### LogDetailWithException
 
-Exception olan request'ler için:
+For requests that raised an exception:
 
 ```csharp
 public class LogDetailWithException : LogDetail
@@ -35,15 +35,15 @@ public class LogDetailWithException : LogDetail
 ```csharp
 public class LogParameter
 {
-    public string Name { get; set; }   // Parametre adı
-    public object Value { get; set; }  // Parametre değeri
-    public string Type { get; set; }   // .NET tip adı
+    public string Name { get; set; }   // Parameter name
+    public object Value { get; set; }  // Parameter value
+    public string Type { get; set; }   // .NET type name
 }
 ```
 
 ### FileLogConfiguration
 
-Serilog file sink konfigürasyonu:
+Serilog file sink configuration:
 
 ```json
 {

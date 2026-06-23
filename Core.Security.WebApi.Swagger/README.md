@@ -1,8 +1,8 @@
 # Core.Security.WebApi.Swagger
 
-Swagger UI'a JWT Bearer token desteği ekleyen Swashbuckle operation filter.
+A Swashbuckle operation filter that adds JWT Bearer token support to the Swagger UI.
 
-## Kurulum
+## Installation
 
 ```csharp
 // Program.cs
@@ -21,4 +21,4 @@ builder.Services.AddSwaggerGen(c =>
 });
 ```
 
-`BearerSecurityRequirementOperationFilter`, tüm endpoint'lere otomatik olarak Bearer güvenlik gereksinimi ekler. Bu sayede Swagger UI'da kilit ikonu görünür ve token girilebilir.
+`BearerSecurityRequirementOperationFilter` automatically adds a Bearer security requirement to all endpoints. This makes the lock icon appear in the Swagger UI and allows a token to be entered.

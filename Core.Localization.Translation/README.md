@@ -1,10 +1,10 @@
 # Core.Localization.Translation
 
-`ITranslationService` üzerinden gerçek zamanlı çeviri yapan lokalizasyon implementasyonu.
+Localization implementation that performs real-time translation via `ITranslationService`.
 
-## Nasıl Çalışır
+## How It Works
 
-`TranslateLocalizationManager`, `ILocalizationService`'i implement eder ve istenen key'i `ITranslationService.TranslateAsync()` ile hedef dile çevirir.
+`TranslateLocalizationManager` implements `ILocalizationService` and translates the requested key into the target language using `ITranslationService.TranslateAsync()`.
 
 ```
 GetLocalizedAsync("UserNotFound", locales: ["tr"]) 
@@ -13,19 +13,19 @@ GetLocalizedAsync("UserNotFound", locales: ["tr"])
   → "Kullanıcı bulunamadı."
 ```
 
-## Fark: YAML vs Translation
+## Difference: YAML vs Translation
 
-| | YAML Lokalizasyon | Translation Lokalizasyon |
+| | YAML Localization | Translation Localization |
 |---|---|---|
-| Kaynak | Statik `.yaml` dosyaları | Dinamik çeviri servisi |
-| Gecikme | Sıfır (cache'li) | Network round-trip |
-| Dil desteği | Sadece tanımlı locale'ler | Herhangi bir dil |
-| Maliyet | Yok | API maliyeti |
+| Source | Static `.yaml` files | Dynamic translation service |
+| Latency | Zero (cached) | Network round-trip |
+| Language support | Only defined locales | Any language |
+| Cost | None | API cost |
 
-## DI Kaydı
+## DI Registration
 
 ```csharp
-// Amazon Translate ile
+// With Amazon Translate
 builder.Services.AddAmazonTranslate(config);
 builder.Services.AddScoped<ILocalizationService, TranslateLocalizationManager>();
 ```

@@ -1,18 +1,18 @@
-# NArchitecture NuGet Paketleri
+# NArchitecture NuGet Packages
 
-Bu dokümanda `NetCoreBackend.NArchitecture.*` ailesindeki tüm NuGet paketleri, kullanım amaçları ve kurulum komutları açıklanmaktadır.
+This document describes all NuGet packages in the `NetCoreBackend.NArchitecture.*` family, their purpose, and their installation commands.
 
-**Prefix:** Tüm paket adları `NetCoreBackend.NArchitecture.` ile başlar.  
+**Prefix:** All package names start with `NetCoreBackend.NArchitecture.`.  
 **Version:** `1.0.0`  
 **Target:** `net10.0`
 
 ---
 
-## İçindekiler
+## Table of Contents
 
 1. [Exception Handling](#1-exception-handling)
 2. [Logging](#2-logging)
-3. [Persistence (Veri Erişimi)](#3-persistence)
+3. [Persistence (Data Access)](#3-persistence)
 4. [Security (JWT / Hashing / 2FA)](#4-security)
 5. [Multi-Tenancy](#5-multi-tenancy)
 6. [Application Layer (CQRS / MediatR)](#6-application-layer)
@@ -21,7 +21,7 @@ Bu dokümanda `NetCoreBackend.NArchitecture.*` ailesindeki tüm NuGet paketleri,
 9. [Mailing](#9-mailing)
 10. [Outbox Pattern](#10-outbox-pattern)
 11. [ElasticSearch](#11-elasticsearch)
-12. [Tipik Kurulum Senaryoları](#12-tipik-kurulum-senaryoları)
+12. [Typical Installation Scenarios](#12-typical-installation-scenarios)
 
 ---
 
@@ -29,40 +29,40 @@ Bu dokümanda `NetCoreBackend.NArchitecture.*` ailesindeki tüm NuGet paketleri,
 
 ### `Core.CrossCuttingConcerns.Exception`
 
-Domain exception tipleri: `BusinessException`, `ValidationException`, `AuthorizationException`, `NotFoundException` ve soyut `ExceptionHandler` altyapısı.
+Domain exception types: `BusinessException`, `ValidationException`, `AuthorizationException`, `NotFoundException`, and the abstract `ExceptionHandler` infrastructure.
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.Exception
 ```
 
-**Ne zaman:** Application/Domain katmanında exception fırlatmak için. Dış bağımlılığı yoktur.
+**When:** For throwing exceptions in the Application/Domain layer. It has no external dependencies.
 
 ---
 
 ### `Core.CrossCuttingConcerns.Exception.WebAPI`
 
-Global exception middleware — RFC 7807 ProblemDetails formatında hata yanıtları döner. Exception tipini HTTP status code'a map eder (400/401/404).
+Global exception middleware — returns error responses in RFC 7807 ProblemDetails format. Maps the exception type to an HTTP status code (400/401/404).
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.Exception.WebAPI
 ```
 
-**Ne zaman:** ASP.NET Core WebAPI projelerinde. `Program.cs`'e `UseExceptionHandling()` eklenir.
+**When:** In ASP.NET Core WebAPI projects. `UseExceptionHandling()` is added to `Program.cs`.
 
-**Otomatik gelen bağımlılıklar:**
+**Transitive dependencies:**
 - `Core.CrossCuttingConcerns.Exception`
-- `Core.CrossCuttingConcerns.Logging` (logging modelleri)
+- `Core.CrossCuttingConcerns.Logging` (logging models)
 - `Newtonsoft.Json`
 
 ---
 
 ## 2. Logging
 
-Logging altyapısı katmanlıdır: abstraction → model → implementasyon.
+The logging infrastructure is layered: abstraction → model → implementation.
 
 ### `Core.CrossCuttingConcerns.Logging.Abstraction`
 
-`ILogger` interface'i. Tüm logging implementasyonlarının kontratı.
+The `ILogger` interface. The contract for all logging implementations.
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.Logging.Abstraction
@@ -72,7 +72,7 @@ dotnet add package NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.Loggin
 
 ### `Core.CrossCuttingConcerns.Logging`
 
-`LogDetail`, `LogDetailWithException`, `LogParameter`, `FileLogConfiguration` modelleri.
+The `LogDetail`, `LogDetailWithException`, `LogParameter`, `FileLogConfiguration` models.
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.Logging
@@ -82,13 +82,13 @@ dotnet add package NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.Loggin
 
 ### `Core.CrossCuttingConcerns.Logging.SeriLog`
 
-Serilog tabanlı `ILogger` implementasyonu. Abstract base class — sink seçimi için genişletilir.
+Serilog-based `ILogger` implementation. An abstract base class — extended to choose a sink.
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.Logging.SeriLog
 ```
 
-**Otomatik gelen bağımlılıklar:**
+**Transitive dependencies:**
 - `Core.CrossCuttingConcerns.Logging.Abstraction`
 - `Core.CrossCuttingConcerns.Logging`
 - `Serilog`
@@ -97,13 +97,13 @@ dotnet add package NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.Loggin
 
 ### `Core.CrossCuttingConcerns.Logging.Serilog.File`
 
-Serilog **file sink** implementasyonu. Günlük rolling log, 50 MB sınır, servis bazlı klasör yapısı.
+Serilog **file sink** implementation. Daily rolling log, 50 MB limit, per-service folder structure.
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.Logging.Serilog.File
 ```
 
-**Otomatik gelen bağımlılıklar:**
+**Transitive dependencies:**
 - `Core.CrossCuttingConcerns.Logging.SeriLog`
 - `Serilog.Sinks.File`
 
@@ -111,7 +111,7 @@ dotnet add package NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.Loggin
 
 ### `Core.CrossCuttingConcerns.Logging.DependencyInjection`
 
-`AddLogging(ILogger logger)` extension metodu — seçilen logger'ı DI container'a singleton olarak kaydeder.
+The `AddLogging(ILogger logger)` extension method — registers the chosen logger in the DI container as a singleton.
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.Logging.DependencyInjection
@@ -123,24 +123,24 @@ dotnet add package NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.Loggin
 
 ### `Core.Persistence`
 
-EF Core repository pattern. `Entity<TId>`, `TenantEntity<TId>`, soft delete, dynamic filtering, bulk operations, stored procedure desteği.
+EF Core repository pattern. `Entity<TId>`, `TenantEntity<TId>`, soft delete, dynamic filtering, bulk operations, stored procedure support.
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.Persistence
 ```
 
-**Otomatik gelen bağımlılıklar:**
+**Transitive dependencies:**
 - `Microsoft.EntityFrameworkCore`
 - `Microsoft.EntityFrameworkCore.Relational`
 - `System.Linq.Dynamic.Core`
 
-**Not:** Provider (SQL Server, PostgreSQL vb.) ayrıca yüklenir — bu paket provider-agnostic'tir.
+**Note:** The provider (SQL Server, PostgreSQL, etc.) is installed separately — this package is provider-agnostic.
 
 ---
 
 ### `Core.Persistence.DependencyInjection`
 
-`AddDbMigrationApplier<TDbContext>()` extension metodu — startup'ta migration otomatik uygulama.
+The `AddDbMigrationApplier<TDbContext>()` extension method — applies migrations automatically at startup.
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.Persistence.DependencyInjection
@@ -150,13 +150,13 @@ dotnet add package NetCoreBackend.NArchitecture.Core.Persistence.DependencyInjec
 
 ### `Core.Persistence.WebApi`
 
-`UseDbMigrationApplier()` middleware — uygulama açılışında EF Core migration'larını otomatik uygular.
+The `UseDbMigrationApplier()` middleware — automatically applies EF Core migrations on application startup.
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.Persistence.WebApi
 ```
 
-**Ne zaman:** WebAPI projesinde startup migration kontrolü için.
+**When:** For startup migration control in a WebAPI project.
 
 ---
 
@@ -164,13 +164,13 @@ dotnet add package NetCoreBackend.NArchitecture.Core.Persistence.WebApi
 
 ### `Core.Security`
 
-JWT üretimi/doğrulaması, PBKDF2 şifre hashing, Email/OTP 2FA, AES-256-GCM şifreleme, RefreshToken rotasyonu, multi-tenant token claim'leri.
+JWT generation/validation, PBKDF2 password hashing, Email/OTP 2FA, AES-256-GCM encryption, RefreshToken rotation, multi-tenant token claims.
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.Security
 ```
 
-**Otomatik gelen bağımlılıklar:**
+**Transitive dependencies:**
 - `Core.Persistence`
 - `Core.MultiTenancy`
 - `Microsoft.IdentityModel.Tokens`
@@ -181,7 +181,7 @@ dotnet add package NetCoreBackend.NArchitecture.Core.Security
 
 ### `Core.Security.DependencyInjection`
 
-`AddSecurityServices<TUserId, TOperationClaimId, TRefreshTokenId>()` — `JwtHelper`, `EmailAuthenticatorHelper`, `OtpNetOtpAuthenticatorHelper`'ı DI'a kaydeder.
+`AddSecurityServices<TUserId, TOperationClaimId, TRefreshTokenId>()` — registers `JwtHelper`, `EmailAuthenticatorHelper`, and `OtpNetOtpAuthenticatorHelper` in the DI container.
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.Security.DependencyInjection
@@ -191,13 +191,13 @@ dotnet add package NetCoreBackend.NArchitecture.Core.Security.DependencyInjectio
 
 ### `Core.Security.WebApi.Swagger`
 
-Swashbuckle operation filter — Swagger UI'a JWT Bearer token girişi ekler (kilit ikonu).
+Swashbuckle operation filter — adds a JWT Bearer token input to the Swagger UI (the lock icon).
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.Security.WebApi.Swagger
 ```
 
-**Otomatik gelen bağımlılıklar:**
+**Transitive dependencies:**
 - `Swashbuckle.AspNetCore.SwaggerGen`
 
 ---
@@ -206,16 +206,16 @@ dotnet add package NetCoreBackend.NArchitecture.Core.Security.WebApi.Swagger
 
 ### `Core.MultiTenancy`
 
-Tenant çözümleme (JWT claim → `X-Tenant-ID` header → subdomain), `ITenantContext`, `TenantMiddleware`, SuperAdmin impersonation.
+Tenant resolution (JWT claim → `X-Tenant-ID` header → subdomain), `ITenantContext`, `TenantMiddleware`, SuperAdmin impersonation.
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.MultiTenancy
 ```
 
-**Otomatik gelen bağımlılıklar:**
+**Transitive dependencies:**
 - `Core.Persistence`
 
-**Ne zaman:** Uygulamada birden fazla tenant olacaksa. `UseAuthentication()`'dan sonra `UseMultiTenancy()` pipeline'a eklenir.
+**When:** If the application has more than one tenant. `UseMultiTenancy()` is added to the pipeline after `UseAuthentication()`.
 
 ---
 
@@ -223,13 +223,13 @@ dotnet add package NetCoreBackend.NArchitecture.Core.MultiTenancy
 
 ### `Core.Application`
 
-CQRS pipeline behavior'ları: `AuthorizationBehavior`, `RequestValidationBehavior` (FluentValidation), `CachingBehavior`, `LoggingBehavior`, `TransactionScopeBehavior`, `PerformanceBehavior`, `TenantValidationBehavior`.
+CQRS pipeline behaviors: `AuthorizationBehavior`, `RequestValidationBehavior` (FluentValidation), `CachingBehavior`, `LoggingBehavior`, `TransactionScopeBehavior`, `PerformanceBehavior`, `TenantValidationBehavior`.
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.Application
 ```
 
-**Otomatik gelen bağımlılıklar:**
+**Transitive dependencies:**
 - `Core.Security`
 - `Core.MultiTenancy`
 - `Core.CrossCuttingConcerns.Exception`
@@ -238,7 +238,7 @@ dotnet add package NetCoreBackend.NArchitecture.Core.Application
 - `FluentValidation`
 - `FluentValidation.DependencyInjectionExtensions`
 
-**Ne zaman:** Application katmanında MediatR kullanırken — tüm cross-cutting behavior'lar bu paketle gelir.
+**When:** When using MediatR in the Application layer — all cross-cutting behaviors come with this package.
 
 ---
 
@@ -246,7 +246,7 @@ dotnet add package NetCoreBackend.NArchitecture.Core.Application
 
 ### `Core.Localization.Abstraction`
 
-`ILocalizationService` interface'i. Tüm localization implementasyonlarının kontratı.
+The `ILocalizationService` interface. The contract for all localization implementations.
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.Localization.Abstraction
@@ -256,20 +256,20 @@ dotnet add package NetCoreBackend.NArchitecture.Core.Localization.Abstraction
 
 ### `Core.Localization.Resource.Yaml`
 
-YAML dosyası tabanlı localization. `Features/*/Resources/Locales/*.{culture}.yaml` pattern, lazy-loading, `en` fallback.
+YAML file-based localization. `Features/*/Resources/Locales/*.{culture}.yaml` pattern, lazy-loading, `en` fallback.
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.Localization.Resource.Yaml
 ```
 
-**Otomatik gelen bağımlılıklar:**
+**Transitive dependencies:**
 - `YamlDotNet`
 
 ---
 
 ### `Core.Localization.Resource.Yaml.DependencyInjection`
 
-`AddYamlResourceLocalization()` — YAML localization'ı scoped `ILocalizationService` olarak kaydeder.
+`AddYamlResourceLocalization()` — registers YAML localization as a scoped `ILocalizationService`.
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.Localization.Resource.Yaml.DependencyInjection
@@ -279,13 +279,13 @@ dotnet add package NetCoreBackend.NArchitecture.Core.Localization.Resource.Yaml.
 
 ### `Core.Localization.Translation`
 
-Dinamik çeviri tabanlı localization. Statik YAML yerine `ITranslationService` üzerinden gerçek zamanlı çeviri.
+Dynamic translation-based localization. Real-time translation via `ITranslationService` instead of static YAML.
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.Localization.Translation
 ```
 
-**Otomatik gelen bağımlılıklar:**
+**Transitive dependencies:**
 - `Core.Localization.Abstraction`
 - `Core.Translation.Abstraction`
 
@@ -293,7 +293,7 @@ dotnet add package NetCoreBackend.NArchitecture.Core.Localization.Translation
 
 ### `Core.Localization.WebApi`
 
-`LocalizationMiddleware` — `Accept-Language` header'ını okur, `ILocalizationService.AcceptLocales`'i set eder. `UseMultiTenancy()`'den sonra çalışmalı.
+`LocalizationMiddleware` — reads the `Accept-Language` header and sets `ILocalizationService.AcceptLocales`. Must run after `UseMultiTenancy()`.
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.Localization.WebApi
@@ -305,7 +305,7 @@ dotnet add package NetCoreBackend.NArchitecture.Core.Localization.WebApi
 
 ### `Core.Translation.Abstraction`
 
-`ITranslationService` interface'i: `TranslateAsync(text, to, from="en")`.
+The `ITranslationService` interface: `TranslateAsync(text, to, from="en")`.
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.Translation.Abstraction
@@ -315,20 +315,20 @@ dotnet add package NetCoreBackend.NArchitecture.Core.Translation.Abstraction
 
 ### `Core.Translation.AmazonTranslate`
 
-AWS Translate implementasyonu. 75+ dil desteği, BCP 47 dil kodları.
+AWS Translate implementation. 75+ language support, BCP 47 language codes.
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.Translation.AmazonTranslate
 ```
 
-**Otomatik gelen bağımlılıklar:**
+**Transitive dependencies:**
 - `AWSSDK.Translate`
 
 ---
 
 ### `Core.Translation.AmazonTranslate.DependencyInjection`
 
-`AddAmazonTranslation(AmazonTranslateConfiguration)` — AWS Translate'i transient `ITranslationService` olarak kaydeder.
+`AddAmazonTranslation(AmazonTranslateConfiguration)` — registers AWS Translate as a transient `ITranslationService`.
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.Translation.AmazonTranslate.DependencyInjection
@@ -340,26 +340,26 @@ dotnet add package NetCoreBackend.NArchitecture.Core.Translation.AmazonTranslate
 
 ### `Core.Mailing`
 
-`IMailService` abstraction ve `Mail` modeli. Subject, HTML body, to/cc/bcc, attachment, DKIM, SMTP configuration.
+The `IMailService` abstraction and `Mail` model. Subject, HTML body, to/cc/bcc, attachment, DKIM, SMTP configuration.
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.Mailing
 ```
 
-**Otomatik gelen bağımlılıklar:**
+**Transitive dependencies:**
 - `MimeKit`
 
 ---
 
 ### `Core.Mailing.MailKit`
 
-MailKit SMTP implementasyonu. DKIM signing, CRLF injection koruması, per-send connection.
+MailKit SMTP implementation. DKIM signing, CRLF injection protection, per-send connection.
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.Mailing.MailKit
 ```
 
-**Otomatik gelen bağımlılıklar:**
+**Transitive dependencies:**
 - `Core.Mailing`
 - `MailKit`
 
@@ -369,13 +369,13 @@ dotnet add package NetCoreBackend.NArchitecture.Core.Mailing.MailKit
 
 ### `Core.Outbox`
 
-Transactional Outbox pattern — domain event ile DB write atomik. Exponential backoff retry, poison-pill yönetimi, multi-tenant desteği.
+Transactional Outbox pattern — the domain event and DB write are atomic. Exponential backoff retry, poison-pill handling, multi-tenant support.
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.Outbox
 ```
 
-**Otomatik gelen bağımlılıklar:**
+**Transitive dependencies:**
 - `Core.Persistence`
 - `Microsoft.EntityFrameworkCore.Relational`
 
@@ -383,13 +383,13 @@ dotnet add package NetCoreBackend.NArchitecture.Core.Outbox
 
 ### `Core.Outbox.DependencyInjection`
 
-`AddOutbox<TDbContext>(opt)` — `IOutboxStore`, `OutboxOptions`, `OutboxPublisherWorker` (background service) kaydeder.
+`AddOutbox<TDbContext>(opt)` — registers `IOutboxStore`, `OutboxOptions`, and `OutboxPublisherWorker` (background service).
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.Outbox.DependencyInjection
 ```
 
-**Not:** `IOutboxPublisher` implementasyonu (RabbitMQ, Kafka vb.) ayrıca yazılıp kaydedilir.
+**Note:** The `IOutboxPublisher` implementation (RabbitMQ, Kafka, etc.) is written and registered separately.
 
 ---
 
@@ -397,18 +397,18 @@ dotnet add package NetCoreBackend.NArchitecture.Core.Outbox.DependencyInjection
 
 ### `Core.ElasticSearch`
 
-`IElasticSearch` interface ile index yönetimi, CRUD ve arama operasyonları (field-based, simple query string).
+Index management, CRUD, and search operations (field-based, simple query string) via the `IElasticSearch` interface.
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.ElasticSearch
 ```
 
-**Otomatik gelen bağımlılıklar:**
+**Transitive dependencies:**
 - `Elastic.Clients.Elasticsearch`
 
 ---
 
-## 12. Tipik Kurulum Senaryoları
+## 12. Typical Installation Scenarios
 
 ### Minimal WebAPI (Exception + Logging + Persistence + Security + MultiTenancy)
 
@@ -427,17 +427,17 @@ dotnet add package NetCoreBackend.NArchitecture.Core.Security.WebApi.Swagger
 
 ---
 
-### CQRS Application Layer ekleme
+### Adding the CQRS Application Layer
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.Application
 ```
 
-`Core.Application` `Core.Security` ve `Core.MultiTenancy`'yi getirir, ayrıca eklemeye gerek yoktur.
+`Core.Application` pulls in `Core.Security` and `Core.MultiTenancy`, so there is no need to add them separately.
 
 ---
 
-### YAML Localization ekleme
+### Adding YAML Localization
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.Localization.Resource.Yaml.DependencyInjection
@@ -446,16 +446,16 @@ dotnet add package NetCoreBackend.NArchitecture.Core.Localization.WebApi
 
 ---
 
-### Outbox + RabbitMQ/Kafka ekleme
+### Adding Outbox + RabbitMQ/Kafka
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.Outbox.DependencyInjection
-# Ardından kendi IOutboxPublisher implementasyonunu yaz ve kaydet.
+# Then write and register your own IOutboxPublisher implementation.
 ```
 
 ---
 
-### E-posta gönderimi
+### Sending email
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.Mailing.MailKit
@@ -463,7 +463,7 @@ dotnet add package NetCoreBackend.NArchitecture.Core.Mailing.MailKit
 
 ---
 
-### AWS Translate ile dinamik çeviri
+### Dynamic translation with AWS Translate
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.Translation.AmazonTranslate.DependencyInjection
@@ -472,7 +472,7 @@ dotnet add package NetCoreBackend.NArchitecture.Core.Localization.Translation
 
 ---
 
-## Paket Bağımlılık Özeti
+## Package Dependency Summary
 
 ```
 Core.Application

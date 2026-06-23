@@ -1,8 +1,8 @@
 # Core.Localization.Resource.Yaml
 
-YAML dosyası tabanlı lokalizasyon implementasyonu. Lazy-loading, fallback ve section desteği içerir.
+YAML file based localization implementation. Includes lazy-loading, fallback, and section support.
 
-## Dosya Yapısı
+## File Structure
 
 ```
 Features/
@@ -14,7 +14,7 @@ Features/
             └── Users.de.yaml
 ```
 
-## YAML Formatı
+## YAML Format
 
 ```yaml
 # Users.tr.yaml
@@ -23,16 +23,16 @@ InvalidPassword: "Geçersiz şifre."
 EmailAlreadyExists: "Bu email zaten kayıtlı."
 ```
 
-## Davranış
+## Behavior
 
-- İlk erişimde YAML dosyası yüklenir ve bellekte tutulur (lazy-loading)
-- İstenen locale bulunamazsa varsayılan locale'e (`en`) düşer
-- Key hiçbir locale'de bulunamazsa key'in kendisi döner
-- `section` parametresi YAML dosya adını belirtir
+- On first access, the YAML file is loaded and held in memory (lazy-loading)
+- If the requested locale is not found, it falls back to the default locale (`en`)
+- If the key is not found in any locale, the key itself is returned
+- The `section` parameter specifies the YAML file name
 
-## DI Kaydı
+## DI Registration
 
-[`Core.Localization.Resource.Yaml.DependencyInjection`](../Core.Localization.Resource.Yaml.DependencyInjection/README.md) projesini kullanın.
+Use the [`Core.Localization.Resource.Yaml.DependencyInjection`](../Core.Localization.Resource.Yaml.DependencyInjection/README.md) project.
 
 ```csharp
 builder.Services.AddYamlLocalization();

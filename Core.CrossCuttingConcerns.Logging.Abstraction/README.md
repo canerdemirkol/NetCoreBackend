@@ -1,6 +1,6 @@
 # Core.CrossCuttingConcerns.Logging.Abstraction
 
-Logger arayüzü. Tüm loglama implementasyonlarının uyması gereken contract.
+The logger interface. The contract that all logging implementations must comply with.
 
 ## Interface
 
@@ -16,7 +16,7 @@ public interface ILogger
 }
 ```
 
-## Kullanım
+## Usage
 
 ```csharp
 // DI inject
@@ -33,4 +33,4 @@ public class MyService
 }
 ```
 
-Implementasyonlar: [`Core.CrossCuttingConcerns.Logging.SeriLog`](../Core.CrossCuttingConcerns.Logging.SeriLog/README.md)
+Implementations: [`Core.CrossCuttingConcerns.Logging.SeriLog`](../Core.CrossCuttingConcerns.Logging.SeriLog/README.md)

@@ -1,4 +1,4 @@
-using MediatR;
+using NetCoreBackend.NArchitecture.Core.Mediation.Abstractions;
 using NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.Exception.Types;
 using NetCoreBackend.NArchitecture.Core.MultiTenancy.Abstractions;
 

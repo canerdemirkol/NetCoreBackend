@@ -1,20 +1,20 @@
 # Core.Localization.Abstraction
 
-Lokalizasyon servisi arayüzü. Tüm lokalizasyon implementasyonlarının uyduğu contract.
+Localization service interface. The contract that all localization implementations adhere to.
 
 ## Interface
 
 ```csharp
 public interface ILocalizationService
 {
-    ICollection<string>? AcceptLocales { get; set; }  // Request'ten gelen dil listesi
+    ICollection<string>? AcceptLocales { get; set; }  // List of languages received from the request
 
     Task<string> GetLocalizedAsync(string key, string? keySection = null);
     Task<string> GetLocalizedAsync(string key, ICollection<string> acceptLocales, string? keySection = null);
 }
 ```
 
-## Kullanım
+## Usage
 
 ```csharp
 public class MyCommandHandler
@@ -29,9 +29,9 @@ public class MyCommandHandler
 }
 ```
 
-## Implementasyonlar
+## Implementations
 
-| Proje | Açıklama |
+| Project | Description |
 |---|---|
-| [`Core.Localization.Resource.Yaml`](../Core.Localization.Resource.Yaml/README.md) | YAML dosyalarından statik çeviri |
-| [`Core.Localization.Translation`](../Core.Localization.Translation/README.md) | `ITranslationService` üzerinden dinamik çeviri |
+| [`Core.Localization.Resource.Yaml`](../Core.Localization.Resource.Yaml/README.md) | Static translation from YAML files |
+| [`Core.Localization.Translation`](../Core.Localization.Translation/README.md) | Dynamic translation via `ITranslationService` |

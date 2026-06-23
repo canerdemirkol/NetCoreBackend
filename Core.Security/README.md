@@ -1,26 +1,26 @@
 # Core.Security
 
-JWT tabanlı kimlik doğrulama, şifreleme, OTP/Email authenticator ve claim yönetimi altyapısı.
+Infrastructure for JWT-based authentication, password hashing, OTP/Email authenticators, and claim management.
 
-## Entity'ler
+## Entities
 
-Entity hiyerarşisi tenant izolasyonunu yansıtır:
+The entity hierarchy reflects tenant isolation:
 
-| Entity | Taban | Açıklama |
+| Entity | Base | Description |
 |---|---|---|
-| `User<TId>` | `TenantEntity` | Email, şifre hash/salt, authenticator tipi. Aynı email farklı tenant'larda var olabilir. |
-| `RefreshToken<TId, TUserId>` | `TenantEntity` | Tenant bazlı token yönetimi. Tenant silinince tüm token'lar tek sorguda iptal edilir. |
-| `UserOperationClaim<TId, TUserId, TOperationClaimId>` | `TenantEntity` | Tenant bazlı kullanıcı–izin eşleşmesi. |
-| `EmailAuthenticator<TId>` | `TenantEntity` | Email doğrulama kodu. `TId` PK tipi (User'ın ID tipiyle aynı olması beklenir). |
-| `OtpAuthenticator<TId>` | `TenantEntity` | TOTP tabanlı 2FA. `SecretKey` ham byte[] — production'da `AesGcmEncryptionHelper` ile encrypt'lenip öyle saklanmalı (aşağı bkz.). |
-| `OperationClaim<TId>` | `Entity` | İzin / rol kaydı. Platform genelinde ortaktır, tenant'a özgü değildir. |
-| `AdminRefreshToken<TId, TAdminId>` | `Entity` | PlatformAdmin refresh token'ı. Tenant dışı olduğundan `TenantEntity` değil, `Entity`'den türer. |
+| `User<TId>` | `TenantEntity` | Email, password hash/salt, authenticator type. The same email can exist across different tenants. |
+| `RefreshToken<TId, TUserId>` | `TenantEntity` | Tenant-scoped token management. When a tenant is deleted, all of its tokens are revoked in a single query. |
+| `UserOperationClaim<TId, TUserId, TOperationClaimId>` | `TenantEntity` | Tenant-scoped user-to-permission mapping. |
+| `EmailAuthenticator<TId>` | `TenantEntity` | Email verification code. `TId` is the PK type (expected to match the User's ID type). |
+| `OtpAuthenticator<TId>` | `TenantEntity` | TOTP-based 2FA. `SecretKey` is a raw byte[] — in production it must be encrypted with `AesGcmEncryptionHelper` before being stored (see below). |
+| `OperationClaim<TId>` | `Entity` | Permission / role record. Shared platform-wide, not tenant-specific. |
+| `AdminRefreshToken<TId, TAdminId>` | `Entity` | PlatformAdmin refresh token. Because it is outside the tenant scope, it derives from `Entity`, not `TenantEntity`. |
 
-`TenantEntity` olan entity'lerin tablosunda `TenantId` sütunu fiziksel olarak bulunur. EF Core global query filter tüm SELECT sorgularına otomatik `WHERE TenantId = @currentTenantId` ekler.
+Tables for entities that are `TenantEntity` physically include a `TenantId` column. The EF Core global query filter automatically appends `WHERE TenantId = @currentTenantId` to every SELECT query.
 
 ## Login Flow (Tenant-Aware User)
 
-Kullanıcının henüz JWT'si olmadığından login endpoint'inde tenant JWT claim'den değil, header veya subdomain'den çözümlenir:
+Since the user does not yet have a JWT, the tenant on the login endpoint is resolved not from a JWT claim but from a header or subdomain:
 
 ```
 POST /api/auth/login
@@ -29,9 +29,9 @@ Body: { email, password }
 ```
 
 ```csharp
-// Handler içinde ekstra bir şey yapmana gerek yok.
-// TenantMiddleware X-Tenant-ID'yi okuyup TenantContext'i set etmiş olur.
-// EF Core global filter login sorgusuna da otomatik uygulanır:
+// You don't need to do anything extra inside the handler.
+// TenantMiddleware will have read X-Tenant-ID and set the TenantContext.
+// The EF Core global filter is also applied automatically to the login query:
 // SELECT * FROM Users WHERE Email = @email AND TenantId = 'acme-guid'
 var user = await _userRepository.GetAsync(u => u.Email == request.Email);
 ```
@@ -41,13 +41,13 @@ var user = await _userRepository.GetAsync(u => u.Email == request.Email);
 ```csharp
 JwtHelper<TUserId, TOperationClaimId, TRefreshTokenId>
 
-// Normal kullanıcı token'ı (tenant_id claim otomatik user.TenantId'den alınır)
+// Regular user token (the tenant_id claim is taken automatically from user.TenantId)
 AccessToken token = jwtHelper.CreateToken(user, operationClaims);
 
-// PlatformAdmin token'ı (is_super_admin: true, tenant_id yok)
+// PlatformAdmin token (is_super_admin: true, no tenant_id)
 AccessToken token = jwtHelper.CreateAdminToken(admin, operationClaims);
 
-// PlatformAdmin refresh token'ı
+// PlatformAdmin refresh token
 AdminRefreshToken<TRefreshTokenId, TUserId> rt = jwtHelper.CreateAdminRefreshToken(admin, ipAddress);
 
 // PlatformAdmin impersonation (is_super_admin: true + tenant_id + is_impersonating: true)
@@ -69,17 +69,17 @@ AccessToken token = jwtHelper.CreateImpersonationToken(admin, operationClaims, t
 
 ## Hashing
 
-PBKDF2-HMAC-SHA512, 210.000 iterasyon (OWASP 2024 minimum). Eski HMACSHA512 hash'leri
-salt boyutundan otomatik tespit edilip backward-compat verify ile çalışmaya devam eder.
+PBKDF2-HMAC-SHA512, 210,000 iterations (OWASP 2024 minimum). Legacy HMACSHA512 hashes
+are automatically detected from the salt size and continue to work via backward-compatible verification.
 
 ```csharp
-// Şifre hash'leme (yeni format)
+// Password hashing (new format)
 HashingHelper.CreatePasswordHash("password", out byte[] hash, out byte[] salt);
 
-// Doğrulama (PBKDF2 + legacy HMACSHA512 otomatik destekli)
+// Verification (PBKDF2 + legacy HMACSHA512 supported automatically)
 bool ok = HashingHelper.VerifyPasswordHash("password", hash, salt);
 
-// Login handler'ında lazy migration:
+// Lazy migration in the login handler:
 if (ok && HashingHelper.IsLegacyHash(user.PasswordSalt))
 {
     HashingHelper.CreatePasswordHash(plainPassword, out var newHash, out var newSalt);
@@ -89,22 +89,22 @@ if (ok && HashingHelper.IsLegacyHash(user.PasswordSalt))
 }
 ```
 
-## Authenticator'lar
+## Authenticators
 
 ```csharp
-// Email doğrulama kodu üretme (IEmailAuthenticatorHelper inject edilir)
+// Generate an email verification code (IEmailAuthenticatorHelper is injected)
 string activationKey = await emailAuthenticatorHelper.CreateEmailActivationKey();
 string code = await emailAuthenticatorHelper.CreateEmailActivationCode();
 
-// OTP (Google Authenticator uyumlu TOTP — IOtpAuthenticatorHelper inject edilir)
+// OTP (Google Authenticator-compatible TOTP — IOtpAuthenticatorHelper is injected)
 byte[] secretKey = await otpAuthenticatorHelper.GenerateSecretKey();
 bool valid = await otpAuthenticatorHelper.VerifyCode(secretKey, userEnteredCode);
 ```
 
-## Claim Extension'ları
+## Claim Extensions
 
 ```csharp
-// Claim ekleme (ICollection<Claim>)
+// Adding claims (ICollection<Claim>)
 claims.AddEmail("user@example.com");
 claims.AddNameIdentifier(userId);
 claims.AddRoles(["Admin", "Manager"]);
@@ -112,13 +112,13 @@ claims.AddTenantId(tenantId);
 claims.AddIsSuperAdmin(true);
 claims.AddIsImpersonating(false);
 
-// Claim okuma (ClaimsPrincipal)
+// Reading claims (ClaimsPrincipal)
 Guid? tenantId = user.GetTenantId();
 bool isSuperAdmin = user.IsSuperAdmin();
 bool isImpersonating = user.IsImpersonating();
 ```
 
-## Sabitler
+## Constants
 
 ```csharp
 TenantClaimTypes.TenantId        // "tenant_id"
@@ -130,7 +130,7 @@ GeneralOperationClaims.Admin     // "Admin"
 
 ## PlatformAdmin
 
-Tenant dışı platform yöneticisi. `Entity<TId>`'den türer — `TenantId` sütunu yoktur, EF Core query filter hiç uygulanmaz.
+A platform administrator outside the tenant scope. Derives from `Entity<TId>` — it has no `TenantId` column, and the EF Core query filter is never applied.
 
 ```csharp
 public class PlatformAdmin<TId> : Entity<TId>
@@ -141,17 +141,17 @@ public class PlatformAdmin<TId> : Entity<TId>
 }
 ```
 
-Normal `User<TId>` ile aynı tabloda değildir. Consuming app'te ayrı bir `PlatformAdmins` tablosuna map edilir.
+It is not in the same table as a regular `User<TId>`. In the consuming app, it is mapped to a separate `PlatformAdmins` table.
 
-## JWT — Admin ve Impersonation Token'ları
+## JWT — Admin and Impersonation Tokens
 
 ```csharp
 ITokenHelper<TUserId, TOperationClaimId, TRefreshTokenId>
 
-// Tenant kullanıcı (var olan)
+// Tenant user (existing)
 AccessToken token = tokenHelper.CreateToken(user, claims);
 
-// PlatformAdmin — is_super_admin: true, tenant_id yok
+// PlatformAdmin — is_super_admin: true, no tenant_id
 AccessToken token = tokenHelper.CreateAdminToken(admin, claims);
 
 // PlatformAdmin refresh token
@@ -161,36 +161,36 @@ AdminRefreshToken<TRefreshTokenId, TUserId> rt = tokenHelper.CreateAdminRefreshT
 AccessToken token = tokenHelper.CreateImpersonationToken(admin, claims, tenantId);
 ```
 
-Detaylı akış ve consuming app implementasyonu: [AUTH.md](../AUTH.md)
+Detailed flow and consuming-app implementation: [AUTH.md](../AUTH.md)
 
 ## AuthenticatorType Enum
 
 ```
-None   → Sadece şifre
+None   → Password only
 Email  → Email OTP
 Otp    → Google Authenticator / TOTP
-Sms    → SMS (genişletilebilir)
+Sms    → SMS (extensible)
 ```
 
 ## At-Rest Encryption — `AesGcmEncryptionHelper`
 
-Hash'lenemeyen ama saklanması/geri okunması gereken sensitive payload'lar için. Tipik kullanım: TOTP secret key, OAuth refresh token'ları, 3rd-party API key'leri, recovery code'lar.
+For sensitive payloads that cannot be hashed but must be stored and read back. Typical use: TOTP secret keys, OAuth refresh tokens, 3rd-party API keys, recovery codes.
 
-**Algoritma:** AES-256-GCM (authenticated encryption). Blob layout: `[12-byte nonce][16-byte tag][ciphertext]`. Byte oynatılmış / yanlış key ile decrypt edilen blob `CryptographicException` ile reddedilir — exception mesajı blob length + associatedData presence info'su içerir (key rotation debug'ı kolaylaşır).
+**Algorithm:** AES-256-GCM (authenticated encryption). Blob layout: `[12-byte nonce][16-byte tag][ciphertext]`. A blob that has been tampered with or decrypted with the wrong key is rejected with a `CryptographicException` — the exception message includes the blob length and associatedData presence info (making key rotation debugging easier).
 
-### Kurulum
+### Setup
 
 ```csharp
-// Program.cs — master key SECRET STORE'dan gelmeli (KeyVault, AWS Secrets Manager, vb.)
+// Program.cs — the master key must come from a SECRET STORE (KeyVault, AWS Secrets Manager, etc.)
 byte[] masterKey = Convert.FromBase64String(
     builder.Configuration["EncryptionMasterKey"]
-    ?? throw new InvalidOperationException("EncryptionMasterKey eksik."));
+    ?? throw new InvalidOperationException("EncryptionMasterKey is missing."));
 builder.Services.AddSingleton(new EncryptionMasterKey(masterKey));
 ```
 
-`EncryptionMasterKey(byte[])` ctor 32-byte uzunluk doğrulamasını yapar; daha kısa key `ArgumentException` ile reddedilir. Ctor defensive copy alır, `Value` getter da her okumada copy döndürür → caller'ın master key buffer'ını mutasyonla bozması mümkün değil. Allocation-free hot path için `key.AsSpan()` kullan.
+The `EncryptionMasterKey(byte[])` ctor validates the 32-byte length; a shorter key is rejected with an `ArgumentException`. The ctor takes a defensive copy, and the `Value` getter also returns a copy on every read → it is impossible for the caller to corrupt the master key buffer through mutation. For an allocation-free hot path, use `key.AsSpan()`.
 
-### TOTP secret encryption örneği
+### TOTP secret encryption example
 
 ```csharp
 public sealed class OtpEnrollmentHandler
@@ -203,8 +203,8 @@ public sealed class OtpEnrollmentHandler
     {
         byte[] plainSecret = await _otp.GenerateSecretKey();
 
-        // associatedData ile user binding: bir DB row'unu başka user'a kopyalamak
-        // decrypt'i fail ettirir.
+        // User binding via associatedData: copying a DB row to another user
+        // causes decryption to fail.
         byte[] encryptedSecret = AesGcmEncryptionHelper.Encrypt(
             plaintext: plainSecret,
             key: _key.Value,
@@ -213,7 +213,7 @@ public sealed class OtpEnrollmentHandler
         await _repo.AddAsync(new OtpAuthenticator<Guid>
         {
             UserId    = userId,
-            SecretKey = encryptedSecret    // DB'de ŞİFRELİ durur
+            SecretKey = encryptedSecret    // stored ENCRYPTED in the DB
         });
     }
 
@@ -234,15 +234,15 @@ public sealed class OtpEnrollmentHandler
 
 ### Master key rotation
 
-Blob'a kendi versiyon byte'ını prefix'le (`[0x01][nonce][tag][ciphertext]`), decrypt sırasında prefix'e göre key seç. Migration: eski key ile decrypt → yeni key ile re-encrypt, batched job.
+Prefix the blob with your own version byte (`[0x01][nonce][tag][ciphertext]`), and select the key based on the prefix during decryption. Migration: decrypt with the old key → re-encrypt with the new key, as a batched job.
 
-> Production setup (secret manager seçenekleri + appsettings örneği): [SETUP.md § 12](../SETUP.md#12-outbox--rabbitmq-configuration).
+> Production setup (secret manager options + appsettings example): [SETUP.md § 12](../SETUP.md#12-outbox--rabbitmq-configuration).
 
 ---
 
 ## RefreshToken — Rotation & Theft Detection
 
-`RefreshToken<TId, TUserId>` artık computed flag'lerle gelir:
+`RefreshToken<TId, TUserId>` now comes with computed flags:
 
 ```csharp
 token.IsExpired   // DateTime.UtcNow >= ExpirationDate
@@ -250,11 +250,11 @@ token.IsRevoked   // RevokedDate.HasValue
 token.IsActive    // !IsRevoked && !IsExpired
 ```
 
-`ExpirationDate` her zaman **UTC** olarak yorumlanır.
+`ExpirationDate` is always interpreted as **UTC**.
 
 ### Rotation pattern
 
-Her refresh handle'ında eski token revoke edilir + yeni token verilir; ikisi `ReplacedByToken` ile zincirlenir.
+On each refresh handle, the old token is revoked and a new token is issued; the two are chained via `ReplacedByToken`.
 
 ```csharp
 public sealed class RefreshAccessTokenHandler
@@ -267,8 +267,8 @@ public sealed class RefreshAccessTokenHandler
         if (presented is null)
             throw new AuthorizationException("Unknown refresh token.");
 
-        // REUSE DETECTION — presented token zaten revoke edilmişse, biri replay yapıyor.
-        // Tüm family'yi (aynı user'ın aktif refresh token'larını) iptal et.
+        // REUSE DETECTION — if the presented token is already revoked, someone is replaying it.
+        // Revoke the entire family (the same user's active refresh tokens).
         if (presented.IsRevoked)
         {
             IList<RefreshToken<Guid, Guid>> family =
@@ -296,13 +296,13 @@ public sealed class RefreshAccessTokenHandler
 }
 ```
 
-**Why this matters:** çalınan refresh token'la attacker rotate ederse — legitimate user bir sonraki refresh'inde "already revoked" durumuyla karşılaşır → family revoke tetiklenir → her iki taraf da re-login'e zorlanır. Token sızıntısı kalıcı erişime dönüşmez.
+**Why this matters:** if an attacker rotates with a stolen refresh token — the legitimate user encounters the "already revoked" state on their next refresh → a family revoke is triggered → both parties are forced to re-login. A token leak does not turn into permanent access.
 
 ---
 
-## AdminRefreshToken — PlatformAdmin Refresh Token'ı
+## AdminRefreshToken — PlatformAdmin Refresh Token
 
-`AdminRefreshToken<TId, TAdminId>` PlatformAdmin'e özgü refresh token entity'sidir. `TenantEntity` değil `Entity`'den türer — tenant scope'u yoktur, EF Core global query filter uygulanmaz.
+`AdminRefreshToken<TId, TAdminId>` is the refresh token entity specific to PlatformAdmin. It derives from `Entity`, not `TenantEntity` — it has no tenant scope, and the EF Core global query filter is not applied.
 
 ```csharp
 token.IsExpired   // DateTime.UtcNow >= ExpirationDate
@@ -310,13 +310,13 @@ token.IsRevoked   // RevokedDate.HasValue
 token.IsActive    // !IsRevoked && !IsExpired
 ```
 
-`ITokenHelper` üzerinden üretilir:
+It is produced via `ITokenHelper`:
 
 ```csharp
 AdminRefreshToken<TRefreshTokenId, TUserId> rt =
     tokenHelper.CreateAdminRefreshToken(admin, ipAddress);
 ```
 
-> **Breaking change (v3.0.0):** `ITokenHelper` arayüzüne `CreateAdminRefreshToken` eklendi. `ITokenHelper`'ı doğrudan implement eden sınıfların bu metodu eklemesi gerekir.
+> **Breaking change (v3.0.0):** `CreateAdminRefreshToken` was added to the `ITokenHelper` interface. Classes that implement `ITokenHelper` directly must add this method.
 
-Rotation ve reuse detection mantığı tenant `RefreshToken` ile aynıdır; consuming app'te `AdminId` üzerinden family revoke uygulanır.
+The rotation and reuse-detection logic is the same as for the tenant `RefreshToken`; in the consuming app, the family revoke is applied via `AdminId`.

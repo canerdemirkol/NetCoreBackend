@@ -1,26 +1,26 @@
 # Core.Persistence
 
-EF Core tabanlı repository pattern implementasyonu. Soft delete, sayfalama, dinamik filtreleme ve multi-tenant entity desteği içerir.
+An EF Core-based repository pattern implementation. Includes soft delete, pagination, dynamic filtering, and multi-tenant entity support.
 
-## Entity Hiyerarşisi
+## Entity Hierarchy
 
 ```
 Entity<TId>                    ← Id, CreatedDate, UpdatedDate, DeletedDate
-    └── TenantEntity<TId>      ← + TenantId (Guid) — tenant-aware entity'ler için
+    └── TenantEntity<TId>      ← + TenantId (Guid) — for tenant-aware entities
 ```
 
 ## Repository Pattern
 
 ```csharp
-// Tenant-aware entity için: tenantSetter ZORUNLU.
-// AddMultiTenancy() çağrılmamışsa ITenantEntity Add'inde hard error fırlar.
+// For a tenant-aware entity: tenantSetter is REQUIRED.
+// If AddMultiTenancy() has not been called, a hard error is thrown on ITenantEntity Add.
 public class OrderRepository : EfRepositoryBase<Order, Guid, AppDbContext>
 {
     public OrderRepository(AppDbContext context, ITenantEntitySetter tenantSetter)
         : base(context, tenantSetter) { }
 }
 
-// Tenant-bağımsız entity için (Country gibi): tenantSetter null geçilebilir.
+// For a tenant-independent entity (such as Country): tenantSetter can be passed as null.
 public class CountryRepository : EfRepositoryBase<Country, int, AppDbContext>
 {
     public CountryRepository(AppDbContext context)
@@ -34,19 +34,19 @@ IAsyncRepository<Product, Guid>
 IRepository<Product, Guid>
 ```
 
-## Özellikler
+## Features
 
-| Özellik | Açıklama |
+| Feature | Description |
 |---|---|
-| **Soft Delete** | `DeletedDate` set edilerek soft silinir. Global query filter ile filtrelenir. Cascade soft-delete tenant-aware (başka tenant'ın row'una dokunulmaz). `withDeleted: true` silinmiş kayıtları getirir ancak tenant izolasyonunu korur — başka tenant'ın verisi görünmez. |
-| **Sayfalama** | `ToPaginateAsync(index, size, from)` — `IPaginate<T>` döner. `size <= 0` veya `from > index` `ArgumentOutOfRangeException` fırlatır. |
-| **Dinamik Filtreleme** | `GetListByDynamicAsync(DynamicQuery)` — field, operator, value, logic desteği. `[NotFilterable]` ile işaretli property'ler reddedilir. |
-| **Tenant Otomatik Set** | `Add`/`AddRange`'de `ITenantEntity` ise `TenantId` otomatik set edilir; `ITenantEntitySetter` register edilmemişse hard error. |
-| **SQL Komutları** | `ExecuteSqlRawAsync`, `ExecuteStoredProcedureAsync`, `ExecuteSqlCommand<TResult>` |
+| **Soft Delete** | An entity is soft-deleted by setting `DeletedDate`. It is filtered out by the global query filter. Cascade soft-delete is tenant-aware (another tenant's rows are not touched). `withDeleted: true` retrieves deleted records but preserves tenant isolation — another tenant's data is not visible. |
+| **Pagination** | `ToPaginateAsync(index, size, from)` — returns `IPaginate<T>`. `size <= 0` or `from > index` throws `ArgumentOutOfRangeException`. |
+| **Dynamic Filtering** | `GetListByDynamicAsync(DynamicQuery)` — supports field, operator, value, logic. Properties marked with `[NotFilterable]` are rejected. |
+| **Automatic Tenant Set** | On `Add`/`AddRange`, if the entity is an `ITenantEntity`, `TenantId` is set automatically; if `ITenantEntitySetter` is not registered, a hard error is thrown. |
+| **SQL Commands** | `ExecuteSqlRawAsync`, `ExecuteStoredProcedureAsync`, `ExecuteSqlCommand<TResult>` |
 
-## NotFilterable — Hassas property'leri whitelist'ten çıkar
+## NotFilterable — Exclude sensitive properties from the whitelist
 
-Dinamik query'de kullanıcı-sağlı `field` ismi `typeof(TEntity)` üzerinde public property arar. Hassas alanlara (parola hash'i, internal audit field) erişimi blocklamak için `[NotFilterable]` attribute'unu kullan:
+In a dynamic query, the user-supplied `field` name looks up a public property on `typeof(TEntity)`. To block access to sensitive fields (password hash, internal audit fields), use the `[NotFilterable]` attribute:
 
 ```csharp
 public class User : TenantEntity<Guid>
@@ -57,9 +57,9 @@ public class User : TenantEntity<Guid>
 }
 ```
 
-`User` ve `PlatformAdmin` framework içinde halihazırda işaretlidir.
+`User` and `PlatformAdmin` are already marked within the framework.
 
-## Tenant Entity Oluşturma
+## Creating a Tenant Entity
 
 ```csharp
 // Tenant-aware entity
@@ -75,35 +75,35 @@ public class Country : Entity<int>
 }
 ```
 
-## SQL Metodları ve Tenant Güvenliği
+## SQL Methods and Tenant Safety
 
-### `ExecuteSqlCommand` — Güvenli ✅
+### `ExecuteSqlCommand` — Safe ✅
 
-`DbSet.FromSqlRaw()` üzerinden çalışır. EF Core, yazdığın SQL'i subquery olarak sarar ve global query filter'ı otomatik uygular:
+Runs via `DbSet.FromSqlRaw()`. EF Core wraps the SQL you write as a subquery and applies the global query filter automatically:
 
 ```sql
--- Yazdığın:
+-- What you write:
 SELECT * FROM Orders WHERE Total > 100
 
--- EF Core'un ürettiği:
+-- What EF Core produces:
 SELECT * FROM (...) AS t WHERE t.TenantId = 'acme-guid' AND t.DeletedDate IS NULL
 ```
 
-### `ExecuteSqlRawAsync` / `ExecuteStoredProcedureAsync` — Manuel Tenant Filtresi ⚠️
+### `ExecuteSqlRawAsync` / `ExecuteStoredProcedureAsync` — Manual Tenant Filter ⚠️
 
-`Database.ExecuteSqlRawAsync()` doğrudan veritabanına gider, EF Core filtrelerini tamamen bypass eder. `TenantEntity` üzerinde çağrıldığında **tenant context yoksa exception fırlatır** (SuperAdmin hariç).
+`Database.ExecuteSqlRawAsync()` goes directly to the database and completely bypasses EF Core filters. When called on a `TenantEntity`, it **throws an exception if there is no tenant context** (except for SuperAdmin).
 
 ```csharp
-// Concrete repository içinde CurrentTenantId kullan:
+// Use CurrentTenantId inside the concrete repository:
 public async Task<int> BulkArchiveAsync(DateTime before)
 {
     return await ExecuteSqlRawAsync(
         "UPDATE Orders SET Archived = 1 WHERE TenantId = @p0 AND CreatedDate < @p1",
-        [CurrentTenantId, before]   // ← CurrentTenantId protected property'den gelir
+        [CurrentTenantId, before]   // ← CurrentTenantId comes from a protected property
     );
 }
 
-// Stored procedure: proc kendi içinde @tenantId parametresi almalı
+// Stored procedure: the proc must take a @tenantId parameter itself
 public async Task<int> ArchiveOldOrdersAsync(DateTime before)
 {
     return await ExecuteStoredProcedureAsync(
@@ -113,28 +113,28 @@ public async Task<int> ArchiveOldOrdersAsync(DateTime before)
 }
 ```
 
-`CurrentTenantId` → `EfRepositoryBase`'de `protected Guid? CurrentTenantId => TenantSetter?.CurrentTenantId;` olarak tanımlıdır.
+`CurrentTenantId` → defined in `EfRepositoryBase` as `protected Guid? CurrentTenantId => TenantSetter?.CurrentTenantId;`.
 
 ### `ExecuteUpdateAsync` / `ExecuteDeleteAsync` — Bulk operations, tenant-safe ✅
 
-EF Core 7+ bulk update/delete API'sinin (`UpdateSettersBuilder<T>`) tenant-aware wrapper'ı. Predicate `Query()` üzerinden zincirlendiği için EF Core'un global query filter'ı otomatik uygulanır; ek olarak `GuardTenantContext()` raw-SQL path'leriyle aynı tenant context kontrolünü yapar.
+A tenant-aware wrapper around the EF Core 7+ bulk update/delete API (`UpdateSettersBuilder<T>`). Because the predicate is chained through `Query()`, EF Core's global query filter is applied automatically; in addition, `GuardTenantContext()` performs the same tenant context check as the raw-SQL paths.
 
 ```csharp
-// Bulk update — sadece current tenant'ın kayıtları etkilenir
+// Bulk update — only the current tenant's records are affected
 await _orderRepo.ExecuteUpdateAsync(
     predicate: o => o.Status == OrderStatus.Pending && o.CreatedDate < cutoff,
     setPropertyCalls: setters => setters.SetProperty(o => o.Status, OrderStatus.Expired),
     cancellationToken: ct);
 
-// Bulk delete — soft-delete istiyorsan ExecuteUpdate ile DeletedDate yaz
+// Bulk delete — if you want a soft delete, write DeletedDate via ExecuteUpdate
 await _orderRepo.ExecuteDeleteAsync(
     predicate: o => o.Status == OrderStatus.Archived && o.UpdatedDate < cutoff,
     cancellationToken: ct);
 ```
 
-`Update`/`Delete`'in tek-row paterninden farkı: payload pre-load gerekmez, tek SQL statement gönderilir, bellek efficient. Kullanırken predicate'in TENANT scope'unda olduğundan emin ol — yanlış bir predicate bütün tenant'ın verisini etkileyebilir.
+The difference from the single-row pattern of `Update`/`Delete`: no payload pre-load is required, a single SQL statement is sent, and it is memory-efficient. When using it, make sure the predicate is within the TENANT scope — a wrong predicate can affect the entire tenant's data.
 
-## Dinamik Query
+## Dynamic Query
 
 ```json
 {
@@ -143,4 +143,4 @@ await _orderRepo.ExecuteDeleteAsync(
 }
 ```
 
-Desteklenen operatörler: `eq`, `neq`, `lt`, `lte`, `gt`, `gte`, `isnull`, `isnotnull`, `startswith`, `endswith`, `contains`, `doesnotcontain`, `in`, `between`
+Supported operators: `eq`, `neq`, `lt`, `lte`, `gt`, `gte`, `isnull`, `isnotnull`, `startswith`, `endswith`, `contains`, `doesnotcontain`, `in`, `between`

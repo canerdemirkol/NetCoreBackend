@@ -1,17 +1,17 @@
 # Core.CrossCuttingConcerns.Logging.Serilog.File
 
-Günlük rolling file sink'leri ile dosya tabanlı Serilog logger implementasyonu.
+A file-based Serilog logger implementation with daily rolling file sinks.
 
-## Özellikler
+## Features
 
-- Günlük log rotasyonu (daily rolling)
-- 50 MB dosya boyutu sınırı
-- Genel log dosyası (`AllLogs.txt`)
-- Servis bazlı ayrı klasörler (`SpecificLogFolders`)
-- HTTP request log dosyası (`HttpLog.txt`)
-- `LogContext` enrichment desteği — `{CorrelationId}` gibi ambient property'ler otomatik log satırlarına eklenir
+- Daily log rotation (daily rolling)
+- 50 MB file size limit
+- General log file (`AllLogs.txt`)
+- Separate per-service folders (`SpecificLogFolders`)
+- HTTP request log file (`HttpLog.txt`)
+- `LogContext` enrichment support — ambient properties such as `{CorrelationId}` are automatically added to log lines
 
-## Kurulum
+## Installation
 
 ```csharp
 // Program.cs
@@ -33,9 +33,9 @@ builder.Services.AddSingleton<ILogger, SerilogFileLogger>(sp =>
 }
 ```
 
-> `{CorrelationId}` çalışması için `Core.CrossCuttingConcerns.CorrelationId.WebApi` paketinin `app.UseCorrelationId()` ile pipeline'a eklenmiş olması gerekir.
+> For `{CorrelationId}` to work, the `Core.CrossCuttingConcerns.CorrelationId.WebApi` package must be added to the pipeline via `app.UseCorrelationId()`.
 
-## Oluşturulan Dosyalar
+## Generated Files
 
 ```
 Logs/
@@ -49,7 +49,7 @@ Logs/
     └── OrderService.txt
 ```
 
-## Değişiklik Geçmişi
+## Changelog
 
 ### 1.0.1
-- `Enrich.FromLogContext()` eklendi — `LogContext.PushProperty` ile set edilen property'ler artık log satırlarına yansır
+- Added `Enrich.FromLogContext()` — properties set via `LogContext.PushProperty` are now reflected in log lines

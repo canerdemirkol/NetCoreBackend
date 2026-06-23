@@ -1,8 +1,8 @@
 # Core.Mailing.MailKit
 
-`IMailService`'in MailKit tabanlı SMTP implementasyonu. DKIM imzalama desteği içerir.
+MailKit-based SMTP implementation of `IMailService`. Includes DKIM signing support.
 
-## Kurulum
+## Installation
 
 ```csharp
 // Program.cs
@@ -10,9 +10,9 @@ builder.Services.Configure<MailSettings>(config.GetSection("MailSettings"));
 builder.Services.AddTransient<IMailService, MailKitMailService>();
 ```
 
-## DKIM İmzalama
+## DKIM Signing
 
-DKIM, gönderilen email'lerin gerçekten domain'den geldiğini doğrular. Spam filtrelerine takılmayı önler.
+DKIM verifies that the emails sent genuinely originate from the domain. It helps avoid getting caught by spam filters.
 
 ```json
 {
@@ -24,21 +24,21 @@ DKIM, gönderilen email'lerin gerçekten domain'den geldiğini doğrular. Spam f
 }
 ```
 
-DKIM bilgileri boş bırakılırsa imzalama atlanır.
+If the DKIM information is left empty, signing is skipped.
 
-## SMTP Bağlantı Akışı
+## SMTP Connection Flow
 
 ```
 ConnectAsync(server, port, mapTlsMode(MailSettings.TlsMode), cancellationToken)
-  → AuthenticateAsync(user, password, cancellationToken) [opsiyonel]
+  → AuthenticateAsync(user, password, cancellationToken) [optional]
   → SendAsync(message, cancellationToken)
   → DisconnectAsync(quit: true, cancellationToken)
 ```
 
-Her `SendEmailAsync` çağrısı yeni bir bağlantı açar. TLS davranışı için bkz. [`Core.Mailing` README — TLS Mode](../Core.Mailing/README.md#tls-mode).
+Each `SendEmailAsync` call opens a new connection. For TLS behavior, see [`Core.Mailing` README — TLS Mode](../Core.Mailing/README.md#tls-mode).
 
-## Güvenlik Notları
+## Security Notes
 
-- **CRLF injection koruması:** `Mail.Subject` ve `Mail.UnsubscribeLink` içinde `\r`/`\n` varsa `ArgumentException` fırlatılır (header injection bloğu).
-- **DKIM key cache:** PEM key `Lazy<>` ile bir kez parse edilip cache'lenir; her gönderimde tekrar parse edilmez.
-- **Recipient kontrol:** To/Cc/Bcc'den en az birinde recipient olmalı (BCC-only broadcast desteklenir).
+- **CRLF injection protection:** If `Mail.Subject` or `Mail.UnsubscribeLink` contain `\r`/`\n`, an `ArgumentException` is thrown (header injection blocking).
+- **DKIM key cache:** The PEM key is parsed once via `Lazy<>` and cached; it is not re-parsed on every send.
+- **Recipient validation:** At least one of To/Cc/Bcc must contain a recipient (BCC-only broadcast is supported).

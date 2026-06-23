@@ -1,39 +1,39 @@
 # Core.Application
 
-CQRS ve MediatR tabanlı uygulama katmanı altyapısı. Request pipeline behavior'ları, DTO base sınıfları ve iş kuralı doğrulama mekanizmaları içerir.
+CQRS- and MediatR-based application layer infrastructure. Includes request pipeline behaviors, DTO base classes, and business rule validation mechanisms.
 
 ## Pipeline Behaviors
 
-Request'e ilgili interface eklenerek behavior aktif edilir:
+A behavior is activated by adding the relevant interface to the request:
 
-| Behavior | Interface | Açıklama |
+| Behavior | Interface | Description |
 |---|---|---|
-| `AuthorizationBehavior` | `ISecuredRequest` | Rol tabanlı yetkilendirme. SuperAdmin tüm kontrolleri atlar (SuperAdmin gating için `Roles = ["SuperAdmin"]`). |
-| `SuperAdminBlockBehavior` | `IBlockedForSuperAdmin` | PlatformAdmin (impersonate etmeden) endpoint'i çağırırsa reddeder. Tenant-user-only operasyonlar için. |
-| `RequestValidationBehavior` | otomatik | FluentValidation ile request doğrulama (`ValidationException` → 400) |
-| `CachingBehavior` | `ICachableRequest` | Distributed cache. Key'e tenant prefix otomatik eklenir. |
-| `CacheRemovingBehavior` | `ICacheRemoverRequest` | Cache grubu temizleme |
-| `TransactionScopeBehavior` | `ITransactionalRequest` | İşlem başarısız olursa rollback |
-| `LoggingBehavior` | `ILoggableRequest` | Request/response log. `ISensitiveRequest` implement edilirse payload "[redacted]" loglanır. |
-| `PerformanceBehavior` | `IIntervalRequest` | Yavaş request uyarısı |
-| `TenantValidationBehavior` | `ITenantValidationRequest` | Tenant context olmadan request reddedilir |
+| `AuthorizationBehavior` | `ISecuredRequest` | Role-based authorization. SuperAdmin bypasses all checks (for SuperAdmin gating use `Roles = ["SuperAdmin"]`). |
+| `SuperAdminBlockBehavior` | `IBlockedForSuperAdmin` | Rejects the request if a PlatformAdmin calls the endpoint (without impersonating). For tenant-user-only operations. |
+| `RequestValidationBehavior` | automatic | Request validation via FluentValidation (`ValidationException` → 400) |
+| `CachingBehavior` | `ICachableRequest` | Distributed cache. The tenant prefix is added to the key automatically. |
+| `CacheRemovingBehavior` | `ICacheRemoverRequest` | Clears a cache group |
+| `TransactionScopeBehavior` | `ITransactionalRequest` | Rolls back if the operation fails |
+| `LoggingBehavior` | `ILoggableRequest` | Request/response logging. If `ISensitiveRequest` is implemented, the payload is logged as "[redacted]". |
+| `PerformanceBehavior` | `IIntervalRequest` | Slow request warning |
+| `TenantValidationBehavior` | `ITenantValidationRequest` | The request is rejected without a tenant context |
 
-> **Cache key kuralı:** `ICachableRequest.CacheKey` consuming app'te **benzersiz** olmalı. Framework key'leri `t:<tenantId>:<CacheKey>` formatında prefix'liyor ama farklı handler'lar aynı CacheKey değerini kullanırsa cache çakışması ve deserialization hatası yaşanır. Konvansiyon: `"Products:GetAll"`, `"Products:ById:{id}"`, asla yalın `"Products"`.
+> **Cache key rule:** `ICachableRequest.CacheKey` must be **unique** within the consuming app. The framework prefixes keys in the `t:<tenantId>:<CacheKey>` format, but if different handlers use the same CacheKey value, you will experience cache collisions and deserialization errors. Convention: `"Products:GetAll"`, `"Products:ById:{id}"`, never a bare `"Products"`.
 
-> **`ISensitiveRequest`:** Şifre, token, kredi kartı vb. veri taşıyan command'lara uygulayın — `LoggingBehavior` payload'ı redact eder, sadece request tipi loglanır.
+> **`ISensitiveRequest`:** Apply this to commands carrying data such as passwords, tokens, or credit cards — `LoggingBehavior` redacts the payload and logs only the request type.
 
-## Kullanım
+## Usage
 
 ```csharp
-// Secured + cached + tenant-validated bir query örneği
+// Example of a secured + cached + tenant-validated query
 public class GetProductsQuery : IRequest<GetListResponse<ProductDto>>,
     ISecuredRequest,
     ICachableRequest,
     ITenantValidationRequest
 {
     public string[] Roles => ["Manager", "Admin"];
-    // CacheKey query handler içinde benzersiz olmalı — bare "Products" değil,
-    // sorgu+parametre kimliğini yansıtan bir değer kullan (örn. "Products:GetAll").
+    // CacheKey must be unique within the query handler — not a bare "Products",
+    // use a value that reflects the query + parameter identity (e.g. "Products:GetAll").
     public string CacheKey => "Products:GetAll";
     public string? CacheGroupKey => "Products";
     public bool BypassCache => false;
@@ -41,9 +41,9 @@ public class GetProductsQuery : IRequest<GetListResponse<ProductDto>>,
 }
 ```
 
-## Bağımlılıklar
+## Dependencies
 
-- `Core.Security` — yetkilendirme ve claim extension'ları
-- `Core.MultiTenancy` — ITenantContext ve tenant claim'leri
+- `Core.Security` — authorization and claim extensions
+- `Core.MultiTenancy` — ITenantContext and tenant claims
 - `Core.CrossCuttingConcerns.Exception` — AuthorizationException
 - `Core.CrossCuttingConcerns.Logging` — LogDetail, LogParameter

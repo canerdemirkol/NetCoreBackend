@@ -1,48 +1,48 @@
 # Core.CrossCuttingConcerns.Exception
 
-Domain katmanı için özel exception tipleri ve soyut exception handler altyapısı.
+Custom exception types and an abstract exception handler infrastructure for the domain layer.
 
-## Exception Tipleri
+## Exception Types
 
-| Exception | HTTP Karşılığı | Kullanım |
+| Exception | HTTP Equivalent | Usage |
 |---|---|---|
-| `BusinessException` | 400 Bad Request | İş kuralı ihlali |
-| `ValidationException` | 400 Bad Request | FluentValidation hataları |
-| `AuthorizationException` | 401 Unauthorized | Yetkisiz erişim |
-| `NotFoundException` | 404 Not Found | Kayıt bulunamadı |
+| `BusinessException` | 400 Bad Request | Business rule violation |
+| `ValidationException` | 400 Bad Request | FluentValidation errors |
+| `AuthorizationException` | 401 Unauthorized | Unauthorized access |
+| `NotFoundException` | 404 Not Found | Record not found |
 
-## Kullanım
+## Usage
 
 ```csharp
-// Business rule ihlali
+// Business rule violation
 if (await _userRepository.AnyAsync(u => u.Email == request.Email))
-    throw new BusinessException("Bu email zaten kayıtlı.");
+    throw new BusinessException("This email is already registered.");
 
-// Kayıt bulunamadı
+// Record not found
 User? user = await _userRepository.GetAsync(u => u.Id == id);
 if (user is null)
-    throw new NotFoundException("Kullanıcı bulunamadı.");
+    throw new NotFoundException("User not found.");
 
-// Yetki hatası
+// Authorization error
 if (!user.IsActive)
-    throw new AuthorizationException("Hesabınız aktif değil.");
+    throw new AuthorizationException("Your account is not active.");
 ```
 
 ## ValidationException
 
-FluentValidation hataları otomatik olarak `ValidationException`'a dönüştürülür:
+FluentValidation errors are automatically converted into a `ValidationException`:
 
 ```csharp
 // ValidationExceptionModel
 {
     Property = "Email",
-    Errors = ["Geçerli bir email giriniz.", "Email boş olamaz."]
+    Errors = ["Enter a valid email.", "Email cannot be empty."]
 }
 ```
 
-## ExceptionHandler (Soyut)
+## ExceptionHandler (Abstract)
 
-Farklı exception tiplerine göre özelleştirilmiş işlem yapılmak istendiğinde genişletilebilir:
+Can be extended when you want customized handling for different exception types:
 
 ```csharp
 public class MyExceptionHandler : ExceptionHandler

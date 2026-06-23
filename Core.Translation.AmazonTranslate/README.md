@@ -1,8 +1,8 @@
 # Core.Translation.AmazonTranslate
 
-`ITranslationService`'in AWS Translate tabanlı implementasyonu.
+AWS Translate-based implementation of `ITranslationService`.
 
-## Kurulum
+## Installation
 
 ```csharp
 // Program.cs
@@ -14,7 +14,7 @@ builder.Services.AddAmazonTranslate(new AmazonTranslateConfiguration
 });
 ```
 
-Ya da appsettings.json:
+Or via appsettings.json:
 
 ```json
 {
@@ -26,13 +26,13 @@ Ya da appsettings.json:
 }
 ```
 
-## Desteklenen Diller
+## Supported Languages
 
-AWS Translate 75+ dili destekler. Tam liste: [AWS Translate Supported Languages](https://docs.aws.amazon.com/translate/latest/dg/what-is-languages.html)
+AWS Translate supports 75+ languages. Full list: [AWS Translate Supported Languages](https://docs.aws.amazon.com/translate/latest/dg/what-is-languages.html)
 
-## Kullanım Senaryosu
+## Usage Scenario
 
-Çoğunlukla [`Core.Localization.Translation`](../Core.Localization.Translation/README.md) üzerinden dolaylı kullanılır:
+It is mostly used indirectly through [`Core.Localization.Translation`](../Core.Localization.Translation/README.md):
 
 ```
 ILocalizationService

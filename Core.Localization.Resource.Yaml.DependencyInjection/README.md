@@ -1,22 +1,22 @@
 # Core.Localization.Resource.Yaml.DependencyInjection
 
-YAML lokalizasyonunu DI container'a kaydeden extension metot.
+Extension method that registers YAML localization into the DI container.
 
-## Kurulum
+## Setup
 
 ```csharp
 // Program.cs
 builder.Services.AddYamlResourceLocalization();
 ```
 
-`ServiceCollectionResourceLocalizationManagerExtension`, `Features/*/Resources/Locales/*.{culture}.yaml` pattern'indeki dosyaları tarar ve `ResourceLocalizationManager`'ı `ILocalizationService` olarak scoped kaydeder.
+`ServiceCollectionResourceLocalizationManagerExtension` scans files matching the `Features/*/Resources/Locales/*.{culture}.yaml` pattern and registers `ResourceLocalizationManager` as `ILocalizationService` with scoped lifetime.
 
-## Middleware ile Birlikte Kullanım
+## Usage with Middleware
 
 ```csharp
-// Locale tespiti için middleware (Core.Localization.WebApi)
+// Middleware for locale detection (Core.Localization.WebApi)
 app.UseResponseLocalization();
 
-// Dil sıralaması: Accept-Language header'dan otomatik alınır
-// Örnek: Accept-Language: tr, en;q=0.9
+// Language ordering: automatically taken from the Accept-Language header
+// Example: Accept-Language: tr, en;q=0.9
 ```

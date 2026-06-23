@@ -1,10 +1,10 @@
 # Core.CrossCuttingConcerns.Logging.SeriLog
 
-`ILogger` arayüzünün Serilog tabanlı implementasyonu.
+A Serilog-based implementation of the `ILogger` interface.
 
-## Soyut Sınıf
+## Abstract Class
 
-`SerilogLoggerServiceBase`, `ILogger`'ı implement eder ve her log seviyesini Serilog karşılığına eşler:
+`SerilogLoggerServiceBase` implements `ILogger` and maps each log level to its Serilog equivalent:
 
 | ILogger | Serilog |
 |---|---|
@@ -15,9 +15,9 @@
 | `Error` | `Error` |
 | `Critical` | `Fatal` |
 
-## Genişletme
+## Extending
 
-Somut implementasyonlar bu sınıftan türetilir ve Serilog sink konfigürasyonu sağlar:
+Concrete implementations derive from this class and provide the Serilog sink configuration:
 
 ```csharp
 public class MyFileLogger : SerilogLoggerServiceBase
@@ -31,4 +31,4 @@ public class MyFileLogger : SerilogLoggerServiceBase
 }
 ```
 
-Hazır implementasyon: [`Core.CrossCuttingConcerns.Logging.Serilog.File`](../Core.CrossCuttingConcerns.Logging.Serilog.File/README.md)
+Ready-made implementation: [`Core.CrossCuttingConcerns.Logging.Serilog.File`](../Core.CrossCuttingConcerns.Logging.Serilog.File/README.md)

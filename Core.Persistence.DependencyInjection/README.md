@@ -1,22 +1,22 @@
 # Core.Persistence.DependencyInjection
 
-Veritabanı migration'larını otomatik uygulayan servisin DI kaydı.
+DI registration for the service that automatically applies database migrations.
 
-## Kurulum
+## Installation
 
 ```csharp
 // Program.cs
 builder.Services.AddDbMigrationApplier<AppDbContext>();
 ```
 
-`DbMigrationApplierManager<TDbContext>`, hem `IDbMigrationApplierService` hem de `IDbMigrationApplierService<TDbContext>` olarak transient kaydedilir. DbContext, factory'ler çağrıldığında uygulamanın gerçek `IServiceProvider`'ından scoped olarak çözülür.
+`DbMigrationApplierManager<TDbContext>` is registered as transient under both `IDbMigrationApplierService` and `IDbMigrationApplierService<TDbContext>`. When the factories are invoked, the DbContext is resolved as scoped from the application's actual `IServiceProvider`.
 
-## Migration Uygulama
+## Applying Migrations
 
-Servisi çalıştırmak için [`Core.Persistence.WebApi`](../Core.Persistence.WebApi/README.md) extension metodunu kullanın:
+To run the service, use the [`Core.Persistence.WebApi`](../Core.Persistence.WebApi/README.md) extension method:
 
 ```csharp
 app.UseDbMigrationApplier();
 ```
 
-Bu, uygulama başlarken bekleyen migration'ları otomatik olarak çalıştırır (`Database.Migrate()`).
+This automatically runs pending migrations when the application starts (`Database.Migrate()`).

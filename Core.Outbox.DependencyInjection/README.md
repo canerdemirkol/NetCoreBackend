@@ -1,8 +1,8 @@
 # Core.Outbox.DependencyInjection
 
-`Core.Outbox`'a DI kayıt yardımcısı.
+A DI registration helper for `Core.Outbox`.
 
-## Kullanım
+## Usage
 
 ```csharp
 // Program.cs
@@ -17,20 +17,20 @@ builder.Services.AddOutbox<AppDbContext>(opt =>
     opt.MaxRetryDelay    = TimeSpan.FromMinutes(10);
 });
 
-// Publisher consumer-spesifik — kendin implement et ve register et:
+// The publisher is consumer-specific — implement and register it yourself:
 builder.Services.AddScoped<IOutboxPublisher, MyRabbitMqPublisher>();
 ```
 
-## Ne Register Ediliyor
+## What Gets Registered
 
-| Service | Lifetime | Açıklama |
+| Service | Lifetime | Description |
 |---|---|---|
-| `IOutboxStore` | Scoped (TryAdd) | `EfOutboxStore<TDbContext>` — consumer custom store register etmişse override edilmez |
-| `OutboxOptions` | Singleton | `IOptions<T>` üzerinden |
-| `OutboxPublisherWorker` | HostedService | BackgroundService — host başladığında çalışmaya başlar |
+| `IOutboxStore` | Scoped (TryAdd) | `EfOutboxStore<TDbContext>` — not overridden if the consumer has registered a custom store |
+| `OutboxOptions` | Singleton | via `IOptions<T>` |
+| `OutboxPublisherWorker` | HostedService | BackgroundService — starts running when the host starts |
 
-## Consumer Sorumlulukları
+## Consumer Responsibilities
 
-1. `AddDbContext<TDbContext>(...)` ile DbContext'i kayıt et.
-2. `OnModelCreating` içinde `modelBuilder.ConfigureOutbox()` çağır.
-3. `IOutboxPublisher` implementasyonunu register et (Scoped önerilir — her batch yeni scope).
+1. Register the DbContext with `AddDbContext<TDbContext>(...)`.
+2. Call `modelBuilder.ConfigureOutbox()` inside `OnModelCreating`.
+3. Register the `IOutboxPublisher` implementation (Scoped is recommended — a new scope per batch).

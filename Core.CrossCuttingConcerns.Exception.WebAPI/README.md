@@ -1,25 +1,25 @@
 # Core.CrossCuttingConcerns.Exception.WebAPI
 
-ASP.NET Core Web API için global exception handling middleware ve RFC 7807 uyumlu ProblemDetails response'ları.
+Global exception handling middleware and RFC 7807-compliant ProblemDetails responses for ASP.NET Core Web API.
 
-## Kurulum
+## Installation
 
 ```csharp
 // Program.cs
-app.ConfigureCustomExceptionMiddleware(); // UseRouting'den önce
+app.ConfigureCustomExceptionMiddleware(); // before UseRouting
 ```
 
-## HTTP Yanıt Eşleştirme
+## HTTP Response Mapping
 
-| Exception | HTTP Status | ProblemDetails Tipi |
+| Exception | HTTP Status | ProblemDetails Type |
 |---|---|---|
 | `BusinessException` | 400 | `BusinessProblemDetails` |
 | `ValidationException` | 400 | `ValidationProblemDetails` |
 | `AuthorizationException` | 401 | `AuthorizationProblemDetails` |
 | `NotFoundException` | 404 | `NotFoundProblemDetails` |
-| Diğer `Exception` | 500 | `InternalServerErrorProblemDetails` |
+| Other `Exception` | 500 | `InternalServerErrorProblemDetails` |
 
-## Örnek Response
+## Example Response
 
 ```json
 // 400 - BusinessException
@@ -27,7 +27,7 @@ app.ConfigureCustomExceptionMiddleware(); // UseRouting'den önce
   "type": "https://example.com/probs/business",
   "title": "Business Rule Violation",
   "status": 400,
-  "detail": "Bu email zaten kayıtlı."
+  "detail": "This email is already registered."
 }
 
 // 400 - ValidationException
@@ -36,7 +36,7 @@ app.ConfigureCustomExceptionMiddleware(); // UseRouting'den önce
   "title": "Validation Error",
   "status": 400,
   "errors": {
-    "Email": ["Geçerli bir email giriniz."]
+    "Email": ["Enter a valid email."]
   }
 }
 ```
@@ -44,11 +44,11 @@ app.ConfigureCustomExceptionMiddleware(); // UseRouting'den önce
 ## Middleware Pipeline
 
 ```
-ConfigureCustomExceptionMiddleware()   ← tüm exception'ları yakalar
+ConfigureCustomExceptionMiddleware()   ← catches all exceptions
 UseRouting()
 UseAuthentication()
 UseAuthorization()
 MapControllers()
 ```
 
-`ExceptionMiddleware`, exception'ı loglar (`ILogger`) ve `HttpExceptionHandler` aracılığıyla response'u yazar.
+`ExceptionMiddleware` logs the exception (`ILogger`) and writes the response through the `HttpExceptionHandler`.

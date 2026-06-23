@@ -1,19 +1,19 @@
 # Core.Test
 
-İki rolü tek projede birleştirir:
+Combines two roles in a single project:
 
-1. **Consuming app'lere shipping edilen test helpers** — `BaseFakeData`, `MockRepositoryHelper`, `BaseMockRepository`, `ValidationErrorCodes`. NuGet üzerinden tüketilir.
-2. **Framework'ün kendi regression test suite'i** — `dotnet test` ile çalışan xUnit testleri (cascade guard, validation race, paginate, AES-GCM, outbox vs.).
+1. **Test helpers shipped to consuming apps** — `BaseFakeData`, `MockRepositoryHelper`, `BaseMockRepository`, `ValidationErrorCodes`. Consumed via NuGet.
+2. **The framework's own regression test suite** — xUnit tests run with `dotnet test` (cascade guard, validation race, paginate, AES-GCM, outbox, etc.).
 
-> Test SDK paketleri (`Microsoft.NET.Test.Sdk`, `xunit`, `xunit.runner.visualstudio`, `coverlet.collector`, `FluentValidation`, `Microsoft.EntityFrameworkCore.InMemory`) `PrivateAssets="all"` ile referans edilir — tüketici uygulamaya transitive olarak akmaz. Consumer sadece `Moq`, `AutoMapper`, `Microsoft.EntityFrameworkCore` bağımlılıklarını alır.
+> The test SDK packages (`Microsoft.NET.Test.Sdk`, `xunit`, `xunit.runner.visualstudio`, `coverlet.collector`, `FluentValidation`, `Microsoft.EntityFrameworkCore.InMemory`) are referenced with `PrivateAssets="all"` — they do not flow transitively to the consuming application. The consumer only gets the `Moq`, `AutoMapper`, and `Microsoft.EntityFrameworkCore` dependencies.
 
-## Çalıştırma
+## Running
 
 ```bash
-# Framework testleri
+# Framework tests
 dotnet test Core.Test/Core.Test.csproj
 
-# Tüm solution
+# The whole solution
 dotnet test
 ```
 
@@ -23,7 +23,7 @@ dotnet test
 
 ## BaseFakeData
 
-Entity için test verisi üreten soyut sınıf:
+An abstract class that generates test data for an entity:
 
 ```csharp
 public class ProductFakeData : BaseFakeData<Product, Guid>
@@ -41,18 +41,18 @@ public class ProductFakeData : BaseFakeData<Product, Guid>
 
 ## MockRepositoryHelper
 
-Moq tabanlı repository mock'u oluşturur. Standart CRUD metotları otomatik setup edilir:
+Creates a Moq-based repository mock. The standard CRUD methods are set up automatically:
 
 ```csharp
 var mockRepo = MockRepositoryHelper.GetRepository<IProductRepository, Product, Guid>(fakeDataList);
 
-// Otomatik setup edilen metotlar:
+// Automatically set up methods:
 // GetListAsync, GetAsync, AddAsync, UpdateAsync, DeleteAsync, AnyAsync
 ```
 
 ## BaseMockRepository
 
-Mapper + mock repository + business rules'u birleştiren test base sınıfı:
+A test base class that combines mapper + mock repository + business rules:
 
 ```csharp
 public class GetProductTests : BaseMockRepository<
@@ -80,7 +80,7 @@ public class GetProductTests : BaseMockRepository<
 
 ## ValidationErrorCodes
 
-FluentValidation hata kodu sabitleri:
+FluentValidation error code constants:
 
 ```csharp
 ValidationErrorCodes.NotEmptyValidator    // "NotEmptyValidator"
@@ -88,7 +88,7 @@ ValidationErrorCodes.MinimumLengthValidator // "MinimumLengthValidator"
 ValidationErrorCodes.EmailValidator       // "EmailValidator"
 ```
 
-Validation sonuçlarını assert ederken kullanılır:
+Used when asserting on validation results:
 
 ```csharp
 var errors = validator.Validate(command).Errors;
@@ -99,12 +99,12 @@ Assert.Contains(errors, e => e.ErrorCode == ValidationErrorCodes.NotEmptyValidat
 
 ## Framework regression suite (internal)
 
-`Core.Test/Application/`, `Persistence/`, `Security/`, `Outbox/` altındaki xUnit testleri framework'ün kendi davranışını koruyor. Bunlar consumer paketine **gitmez** — sadece `dotnet test` zamanında compile ve çalıştırılırlar.
+The xUnit tests under `Core.Test/Application/`, `Persistence/`, `Security/`, and `Outbox/` protect the framework's own behavior. These **do not** go into the consumer package — they are compiled and run only at `dotnet test` time.
 
-| Test sınıfı | Kapsam |
+| Test class | Scope |
 |---|---|
-| `RequestValidationBehaviorTests` | R2 fix regression — concurrent validator'larda per-context isolation |
+| `RequestValidationBehaviorTests` | R2 fix regression — per-context isolation in concurrent validators |
 | `TenantCascadeTests` | R1 fix regression — soft-delete cascade tenant guard + `TenantSetter null` hard error |
-| `PaginateTests` | R3 fix regression — `size <= 0` ve `from > index` guard'ları |
+| `PaginateTests` | R3 fix regression — `size <= 0` and `from > index` guards |
 | `AesGcmEncryptionHelperTests` | round-trip, tamper detection, key mismatch, associated-data mismatch |
-| `EfOutboxStoreTests` | `FetchDueAsync` ordering + filtering, `AppendAsync` non-save semantik, `RecordFailureAsync` bookkeeping |
+| `EfOutboxStoreTests` | `FetchDueAsync` ordering + filtering, `AppendAsync` non-save semantics, `RecordFailureAsync` bookkeeping |

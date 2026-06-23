@@ -1,8 +1,8 @@
 # Core.Security.DependencyInjection
 
-`Core.Security` servislerini DI container'a kaydeden extension metot.
+Extension method that registers `Core.Security` services in the DI container.
 
-## Kurulum
+## Installation
 
 ```csharp
 // Program.cs
@@ -13,11 +13,11 @@ var tokenOptions = builder.Configuration
 builder.Services.AddSecurityServices<Guid, Guid, Guid>(tokenOptions);
 ```
 
-Generic parametreler sırasıyla: `TUserId`, `TOperationClaimId`, `TRefreshTokenId`. Uygulamanızdaki entity ID tipine göre değiştirin.
+The generic parameters are, in order: `TUserId`, `TOperationClaimId`, `TRefreshTokenId`. Change them according to the entity ID type in your application.
 
-Kaydedilen servisler:
+Registered services:
 
-| Arayüz | İmplementasyon | Yaşam Döngüsü |
+| Interface | Implementation | Lifetime |
 |---|---|---|
 | `ITokenHelper<TUserId, TOperationClaimId, TRefreshTokenId>` | `JwtHelper<...>` | Scoped |
 | `IEmailAuthenticatorHelper` | `EmailAuthenticatorHelper` | Scoped |

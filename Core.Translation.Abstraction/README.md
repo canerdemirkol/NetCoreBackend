@@ -1,6 +1,6 @@
 # Core.Translation.Abstraction
 
-Çeviri servisi arayüzü.
+Translation service interface.
 
 ## Interface
 
@@ -11,19 +11,19 @@ public interface ITranslationService
 }
 ```
 
-## Kullanım
+## Usage
 
 ```csharp
 string translated = await translationService.TranslateAsync(
     text: "Hello World",
     to: "tr",
-    from: "en"   // varsayılan "en", belirtilmezse İngilizce kaynak kabul edilir
+    from: "en"   // defaults to "en"; if not specified, an English source is assumed
 );
 // → "Merhaba Dünya"
 ```
 
-`to` ve `from` parametreleri için BCP 47 dil kodları kullanılır (örn. `tr`, `en`, `de`, `fr`).
+The `to` and `from` parameters use BCP 47 language codes (e.g. `tr`, `en`, `de`, `fr`).
 
-## Implementasyon
+## Implementation
 
-[`Core.Translation.AmazonTranslate`](../Core.Translation.AmazonTranslate/README.md) — AWS Translate entegrasyonu
+[`Core.Translation.AmazonTranslate`](../Core.Translation.AmazonTranslate/README.md) — AWS Translate integration

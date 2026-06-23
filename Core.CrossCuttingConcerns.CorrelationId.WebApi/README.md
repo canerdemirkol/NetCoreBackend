@@ -1,8 +1,8 @@
 # Core.CrossCuttingConcerns.CorrelationId.WebApi
 
-ASP.NET Core middleware ve extension'ları: gelen `X-Correlation-Id` header'ını okur, yoksa aktif distributed trace ID'sini kullanır, o da yoksa yeni bir GUID üretir. Response header olarak yayar ve Serilog LogContext'i otomatik zenginleştirir.
+ASP.NET Core middleware and extensions: reads the incoming `X-Correlation-Id` header, falls back to the active distributed trace ID if absent, and generates a new GUID if neither is available. It propagates the value as a response header and automatically enriches the Serilog LogContext.
 
-## Kurulum
+## Installation
 
 ```
 dotnet add package NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.CorrelationId.WebApi
@@ -11,12 +11,12 @@ dotnet add package NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.Correl
 ## Program.cs
 
 ```csharp
-// 1. DI kaydı
+// 1. DI registration
 builder.Services.AddCorrelationId();
 
-// 2. Middleware — pipeline'ın başına, exception middleware'inden önce ekleyin
+// 2. Middleware — add at the start of the pipeline, before the exception middleware
 app.UseCorrelationId();
-app.ConfigureCustomExceptionMiddleware(); // exception log'ları da CorrelationId taşır
+app.ConfigureCustomExceptionMiddleware(); // exception logs also carry the CorrelationId
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
@@ -24,7 +24,7 @@ app.MapControllers();
 
 ## appsettings.json — Serilog template
 
-`{CorrelationId}` log satırlarında görünmesi için `Core.CrossCuttingConcerns.Logging.Serilog.File` kullananlar template'e eklesin:
+For `{CorrelationId}` to appear in log lines, users of `Core.CrossCuttingConcerns.Logging.Serilog.File` should add it to the template:
 
 ```json
 {
@@ -37,17 +37,17 @@ app.MapControllers();
 }
 ```
 
-## Erişim Noktaları
+## Access Points
 
-| Yer | Nasıl |
+| Location | How |
 |---|---|
 | Controller / Service (DI) | `ICorrelationIdAccessor.CorrelationId` |
 | HttpContext | `httpContext.GetCorrelationId()` |
 | Response header | `X-Correlation-Id` |
-| Serilog log satırları | Otomatik — `{CorrelationId}` template property |
+| Serilog log lines | Automatic — `{CorrelationId}` template property |
 
-## ID Öncelik Sırası
+## ID Priority Order
 
-1. Gelen `X-Correlation-Id` request header'ı (API gateway / service mesh propagation)
-2. `Activity.Current?.TraceId` — OpenTelemetry veya Application Insights aktifse trace ile örtüşür
+1. Incoming `X-Correlation-Id` request header (API gateway / service mesh propagation)
+2. `Activity.Current?.TraceId` — aligns with the trace when OpenTelemetry or Application Insights is active
 3. `Guid.NewGuid()` — standalone fallback
