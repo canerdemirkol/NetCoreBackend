@@ -164,7 +164,7 @@ dotnet add package NetCoreBackend.NArchitecture.Core.Persistence.WebApi
 
 ### `Core.Security`
 
-JWT generation/validation, PBKDF2 password hashing, Email/OTP 2FA, AES-256-GCM encryption, RefreshToken rotation, multi-tenant token claims.
+JWT generation/validation, PBKDF2 password hashing, Email/OTP 2FA, AES-256-GCM encryption, RefreshToken rotation, multi-tenant token claims, user-impersonation claim helpers (`ImpersonationClaimTypes`, enriched `CreateToken` overload — 3.1.0).
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.Security

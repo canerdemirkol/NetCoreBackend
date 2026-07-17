@@ -363,6 +363,32 @@ if (_tenantContext.IsImpersonating)
 
 ---
 
+## User-Level Impersonation Building Blocks (Core.Security 3.1.0)
+
+Tenant impersonation above changes only the **data scope** — the identity stays the platform
+admin. User-level impersonation ("login as this user") changes the **identity itself**: the token's
+primary identity is the target user with their real effective claims; the real actor travels in
+dedicated audit claims. The package ships the primitives, the consumer implements the flow:
+
+| Building block | Purpose |
+|---|---|
+| `CreateToken(user, claims, additionalClaims, expirationMinutes?)` | Issue the target-identity token, enriched with impersonator claims + a session-id claim; short lifetime recommended (e.g. 30 min) |
+| `ImpersonationClaimTypes` | `impersonator_id`, `impersonator_type` (`platform_admin` \| `tenant_user`), `impersonator_tenant_id` |
+| `IsUserImpersonation()` / `GetImpersonatorIdClaim()` | Detect the mode / recover the actor from `ClaimsPrincipal` |
+
+Consumer-side rules (reference implementation: NetCoreBackendApi):
+
+- **Never emit `is_super_admin`** on the impersonation token — query filters and authorization
+  must treat it as a normal tenant-user request.
+- **No refresh token** for impersonation sessions; the client silently re-impersonates on expiry.
+- JWT is stateless — ending a session early requires a **denylist** (e.g. Redis keyed by a custom
+  session-id claim, checked in `JwtBearerEvents.OnTokenValidated` only when `IsUserImpersonation()`).
+- Guard rules to enforce in the consumer: nested impersonation ban; tenant admins may only target
+  same-tenant users whose effective claims are a **subset** of their own (privilege-escalation
+  guard); block logout/refresh/revoke and 2FA-setup commands during impersonation.
+
+---
+
 ## Complete Flow Diagram
 
 ```

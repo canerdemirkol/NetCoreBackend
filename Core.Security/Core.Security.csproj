@@ -6,7 +6,7 @@
     <RootNamespace>NetCoreBackend.NArchitecture.$(AssemblyName)</RootNamespace>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <PackageId>NetCoreBackend.NArchitecture.$(AssemblyName)</PackageId>
-    <Version>3.0.1</Version>
+    <Version>3.1.0</Version>
     <Title>NetCoreBackend NArchitecture $(AssemblyName)</Title>
      <Description>Provides security utilities for hashing, encryption, JWT, authenticator, and more.</Description>
     <Product>NetCoreBackend NArchitecture</Product>

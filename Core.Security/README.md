@@ -159,7 +159,16 @@ AdminRefreshToken<TRefreshTokenId, TUserId> rt = tokenHelper.CreateAdminRefreshT
 
 // Impersonation — is_super_admin: true + tenant_id + is_impersonating: true
 AccessToken token = tokenHelper.CreateImpersonationToken(admin, claims, tenantId);
+
+// User-level impersonation (3.1.0) — token's primary identity is the TARGET user with their
+// real claims; extra claims carry the actor; optional short lifetime for impersonation sessions.
+AccessToken token = tokenHelper.CreateToken(targetUser, targetClaims, additionalClaims, expirationMinutes: 30);
 ```
+
+For user-level impersonation, `ImpersonationClaimTypes` (Constants) publishes the claim names
+(`impersonator_id`, `impersonator_type`, `impersonator_tenant_id`) and `ClaimsPrincipalExtensions`
+adds `IsUserImpersonation()` / `GetImpersonatorIdClaim()`. Never emit `is_super_admin` on a
+user-impersonation token — the token must behave exactly like a normal tenant-user request.
 
 Detailed flow and consuming-app implementation: [AUTH.md](../AUTH.md)
 

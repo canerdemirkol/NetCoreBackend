@@ -23,6 +23,15 @@ public class JwtHelper<TUserId, TOperationClaimId, TRefreshTokenId> : ITokenHelp
         return BuildAccessToken(SetClaims(user, operationClaims));
     }
 
+    public virtual AccessToken CreateToken(
+        User<TUserId> user,
+        IList<OperationClaim<TOperationClaimId>> operationClaims,
+        IEnumerable<Claim> additionalClaims,
+        int? expirationMinutes = null)
+    {
+        return BuildAccessToken(SetClaims(user, operationClaims).Concat(additionalClaims), expirationMinutes);
+    }
+
     public RefreshToken<TRefreshTokenId, TUserId> CreateRefreshToken(User<TUserId> user, string ipAddress)
     {
         return new RefreshToken<TRefreshTokenId, TUserId>()
@@ -90,12 +99,12 @@ public class JwtHelper<TUserId, TOperationClaimId, TRefreshTokenId> : ITokenHelp
         return claims.ToImmutableList();
     }
 
-    private AccessToken BuildAccessToken(IEnumerable<Claim> claims)
+    private AccessToken BuildAccessToken(IEnumerable<Claim> claims, int? expirationMinutes = null)
     {
         // JWT spec ("exp", "nbf") uses Unix epoch (UTC). Using DateTime.Now would shift token lifetime
         // by the server timezone offset, causing inconsistent expiration across timezones.
         DateTime notBefore = DateTime.UtcNow;
-        DateTime expiration = notBefore.AddMinutes(_tokenOptions.AccessTokenExpiration);
+        DateTime expiration = notBefore.AddMinutes(expirationMinutes ?? _tokenOptions.AccessTokenExpiration);
         SecurityKey securityKey = SecurityKeyHelper.CreateSecurityKey(_tokenOptions.SecurityKey);
         SigningCredentials signingCredentials = SigningCredentialsHelper.CreateSigningCredentials(securityKey);
         JwtSecurityToken jwt = new(

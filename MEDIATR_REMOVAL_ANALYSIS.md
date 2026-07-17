@@ -1,5 +1,8 @@
 # MediatR Dependency Removal Analysis
 
+> **✅ IMPLEMENTED (2026-06-23):** Side A (`Core.Mediation 1.0.0` + `Core.Application 3.0.0`, published)
+> and Side B (NetCoreBackendApi) are complete and verified. See CHANGELOG.md. Historical record.
+
 > **Context:** MediatR 14.0.0 ships as a transitive dependency of the NArchitecture Core package. As of MediatR 12.4.0, a commercial license is mandatory. This analysis maps out every use of MediatR in the project and evaluates the option of removing the package and writing our own minimal implementation.
 
 ---

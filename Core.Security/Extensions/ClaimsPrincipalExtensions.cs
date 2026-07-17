@@ -1,6 +1,7 @@
 ﻿using System.Collections.Immutable;
 using System.Security.Claims;
 using NetCoreBackend.NArchitecture.Core.MultiTenancy.Constants;
+using NetCoreBackend.NArchitecture.Core.Security.Constants;
 
 namespace NetCoreBackend.NArchitecture.Core.Security.Extensions;
 
@@ -35,5 +36,18 @@ public static class ClaimsPrincipalExtensions
     public static bool IsImpersonating(this ClaimsPrincipal claimsPrincipal)
     {
         return claimsPrincipal?.FindFirst(TenantClaimTypes.IsImpersonating)?.Value == "true";
+    }
+
+    // User-level impersonation: the token's primary identity is the impersonated user and the
+    // real actor travels in ImpersonationClaimTypes. Distinct from IsImpersonating(), which marks
+    // a platform admin operating within a tenant scope with their own identity.
+    public static bool IsUserImpersonation(this ClaimsPrincipal claimsPrincipal)
+    {
+        return claimsPrincipal?.FindFirst(ImpersonationClaimTypes.ImpersonatorId) is not null;
+    }
+
+    public static string? GetImpersonatorIdClaim(this ClaimsPrincipal claimsPrincipal)
+    {
+        return claimsPrincipal?.FindFirst(ImpersonationClaimTypes.ImpersonatorId)?.Value;
     }
 }

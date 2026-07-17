@@ -7,6 +7,29 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [2026-07-17]
+
+### Core.Security 3.1.0
+
+Building blocks for **user-level impersonation** ("login as this user"): issuing a token whose
+primary identity is the target user while the real actor travels in dedicated audit claims.
+Additive only — no existing signature changed.
+
+#### Added
+
+- **`ITokenHelper.CreateToken` overload** — `CreateToken(user, operationClaims, additionalClaims, expirationMinutes = null)`: issues a tenant-user token enriched with arbitrary extra claims (e.g. impersonator identity, a session id for denylisting) and an optional per-call lifetime override (impersonation tokens are typically short-lived). The existing two-parameter overload is unchanged.
+- **`ImpersonationClaimTypes`** (`Core.Security.Constants`) — `impersonator_id`, `impersonator_type` (values: `ImpersonatorTypes.PlatformAdmin` / `TenantUser`), `impersonator_tenant_id`. Publishing the names in the package prevents claim-string drift between producer and consumers. Distinct from tenant impersonation (`TenantClaimTypes.IsImpersonating`), where the identity stays the platform admin and only the data scope changes.
+- **`ClaimsPrincipalExtensions`** — `IsUserImpersonation()` (true when the token carries `impersonator_id`) and `GetImpersonatorIdClaim()`.
+
+#### Notes for consumers
+
+- Recommended pattern: the impersonation token carries the **target user's** identity and real
+  effective claims; never emit `is_super_admin` on it, so query filters and authorization behave
+  as a normal tenant-user request. Do not issue a refresh token for impersonation sessions;
+  revocation before expiry requires a consumer-side denylist (e.g. Redis keyed by a session-id claim).
+
+---
+
 ## [2026-06-23]
 
 ### Core.Mediation 1.0.0 — New package

@@ -1,5 +1,8 @@
 # MediatR Removal — Implementation Prompt (to be given to an AI agent)
 
+> **✅ IMPLEMENTED (2026-06-23):** Side A and Side B are complete and verified
+> (`Core.Mediation 1.0.0`, `Core.Application 3.0.0`, published). See CHANGELOG.md. Historical record.
+
 > This document is the **actionable** form of the `docs/MEDIATR_REMOVAL_ANALYSIS.md` analysis.
 > You can give the instruction below to an AI agent as-is. Work spans two separate repos:
 > **Side A = `NetCoreBackend/`** (library), **Side B = `NetCoreBackendApi/`** (consumer API).

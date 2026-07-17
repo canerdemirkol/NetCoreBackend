@@ -193,6 +193,11 @@ AccessToken token = _tokenHelper.CreateAdminToken(admin, operationClaims);
 
 // PlatformAdmin impersonating a tenant
 AccessToken token = _tokenHelper.CreateImpersonationToken(admin, operationClaims, targetTenantId);
+
+// User-level impersonation (3.1.0) is a different concept: the token's identity becomes the
+// TARGET USER (no is_super_admin), the actor travels in ImpersonationClaimTypes — see AUTH.md,
+// "User-Level Impersonation Building Blocks".
+AccessToken token = _tokenHelper.CreateToken(targetUser, targetClaims, additionalClaims, expirationMinutes: 30);
 ```
 
 ---
