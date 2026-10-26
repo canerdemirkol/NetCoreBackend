@@ -7,6 +7,17 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [2026-10-26]
+
+### Core.CrossCuttingConcerns.Exception.WebApi 1.0.2
+
+#### Fixed
+
+- **`ExceptionMiddleware` concurrency bug** — the middleware is a single instance shared by all requests, but it kept one `HttpExceptionHandler` whose `Response` property was set per request. Two requests failing at the same time could overwrite each other's response: one request's problem details were written to another request, or the connection was dropped (`ArgumentNullException: Value cannot be null. (Parameter 'array')` from `ExceptionMiddleware.Invoke`, "response ended prematurely" on the client). Each failure now uses its own handler. No API change; `HandleExceptionAsync` / `LogException` stay `protected virtual`.
+- Regression test: `Core.Test/CrossCuttingConcerns/ExceptionMiddlewareConcurrencyTests` (2000 concurrent failing requests, each must get its own status and body).
+
+---
+
 ## [2026-07-17]
 
 ### Core.Security 3.1.0

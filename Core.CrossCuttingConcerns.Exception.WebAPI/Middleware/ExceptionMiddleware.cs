@@ -20,7 +20,6 @@ public class ExceptionMiddleware
     };
 
     private readonly IHttpContextAccessor _contextAccessor;
-    private readonly HttpExceptionHandler _httpExceptionHandler;
     private readonly ILogger _loggerService;
     private readonly RequestDelegate _next;
 
@@ -29,7 +28,6 @@ public class ExceptionMiddleware
         _next = next;
         _contextAccessor = contextAccessor;
         _loggerService = loggerService;
-        _httpExceptionHandler = new HttpExceptionHandler();
     }
 
     public async Task Invoke(HttpContext context)
@@ -49,9 +47,11 @@ public class ExceptionMiddleware
     {
         // RFC 7807 recommends application/problem+json; explicit charset prevents UTF-8 ambiguity.
         response.ContentType = "application/problem+json; charset=utf-8";
-        _httpExceptionHandler.Response = response;
 
-        return _httpExceptionHandler.HandleException(exception);
+        // One handler per request: the middleware instance is shared by all requests, so a shared
+        // handler's Response would be overwritten by a concurrent failure (cross-request writes).
+        var httpExceptionHandler = new HttpExceptionHandler { Response = response };
+        return httpExceptionHandler.HandleException(exception);
     }
 
     protected virtual Task LogException(HttpContext context, System.Exception exception)
