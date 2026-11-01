@@ -1,24 +1,27 @@
-﻿using System.Data;
-using NetCoreBackend.NArchitecture.Core.Localization.Abstraction;
+﻿using NetCoreBackend.NArchitecture.Core.Localization.Abstraction;
 using NetCoreBackend.NArchitecture.Core.Translation.Abstraction;
 
 namespace NetCoreBackend.NArchitecture.Core.Localization.Translation;
 
 public class TranslateLocalizationManager : ILocalizationService
 {
-    private const string _defaultLocale = "en";
+    public const string EnglishLocale = "en";
+    private readonly string _defaultLocale;
     public ICollection<string>? AcceptLocales { get; set; }
 
     private readonly ITranslationService _translationService;
 
-    public TranslateLocalizationManager(ITranslationService translationService)
+    public TranslateLocalizationManager(ITranslationService translationService) : this(translationService, EnglishLocale) { }
+
+    public TranslateLocalizationManager(ITranslationService translationService, string defaultLocale)
     {
+        _defaultLocale = defaultLocale;
         _translationService = translationService;
     }
 
     public Task<string> GetLocalizedAsync(string key, string? keySection = null)
     {
-        return GetLocalizedAsync(key, AcceptLocales ?? throw new NoNullAllowedException(nameof(AcceptLocales)));
+        return GetLocalizedAsync(key, AcceptLocales ?? []);
     }
 
     public async Task<string> GetLocalizedAsync(string key, ICollection<string> acceptLocales, string? keySection = null)

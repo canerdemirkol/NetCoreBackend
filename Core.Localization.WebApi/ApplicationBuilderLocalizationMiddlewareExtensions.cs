@@ -8,4 +8,10 @@ public static class ApplicationBuilderLocalizationMiddlewareExtensions
     {
         return builder.UseMiddleware<LocalizationMiddleware>();
     }
+
+    /// <summary>Like <see cref="UseResponseLocalization(IApplicationBuilder)"/>, with a locale for requests that name none.</summary>
+    public static IApplicationBuilder UseResponseLocalization(this IApplicationBuilder builder, string defaultLocale)
+    {
+        return builder.UseMiddleware<LocalizationMiddleware>(new LocalizationMiddlewareOptions { DefaultLocale = defaultLocale });
+    }
 }

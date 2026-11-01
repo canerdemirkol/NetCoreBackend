@@ -17,7 +17,14 @@ public static class ServiceCollectionResourceLocalizationManagerExtension
     ///    </item>
     /// </list>
     /// </summary>
-    public static IServiceCollection AddYamlResourceLocalization(this IServiceCollection services)
+    public static IServiceCollection AddYamlResourceLocalization(this IServiceCollection services) =>
+        services.AddYamlResourceLocalization(ResourceLocalizationManager.EnglishLocale);
+
+    /// <summary>
+    /// Like <see cref="AddYamlResourceLocalization(IServiceCollection)"/>, with <paramref name="defaultLocale"/> used
+    /// when a key is missing in the requested locales or when no locale was requested.
+    /// </summary>
+    public static IServiceCollection AddYamlResourceLocalization(this IServiceCollection services, string defaultLocale)
     {
         services.AddScoped<ILocalizationService, ResourceLocalizationManager>(_ =>
         {
@@ -56,7 +63,7 @@ public static class ServiceCollectionResourceLocalizationManagerExtension
                 }
             }
 
-            return new ResourceLocalizationManager(resources);
+            return new ResourceLocalizationManager(resources, defaultLocale);
         });
 
         return services;

@@ -1,13 +1,14 @@
-﻿using System.Data;
-using NetCoreBackend.NArchitecture.Core.Localization.Abstraction;
+﻿using NetCoreBackend.NArchitecture.Core.Localization.Abstraction;
 using YamlDotNet.RepresentationModel;
 
 namespace NetCoreBackend.NArchitecture.Core.Localization.Resource.Yaml;
 
 public class ResourceLocalizationManager : ILocalizationService
 {
-    private const string _defaultLocale = "en";
+    // Used when no requested locale has the key, and when none was requested at all.
+    public const string EnglishLocale = "en";
     private const string _defaultKeySection = "index";
+    private readonly string _defaultLocale;
     public ICollection<string>? AcceptLocales { get; set; }
 
     // <locale, <section, <path, content>>>
@@ -16,8 +17,11 @@ public class ResourceLocalizationManager : ILocalizationService
     // multiple requests miss the cache simultaneously.
     private readonly object _loadLock = new();
 
-    public ResourceLocalizationManager(Dictionary<string, Dictionary<string, string>> resources)
+    public ResourceLocalizationManager(Dictionary<string, Dictionary<string, string>> resources) : this(resources, EnglishLocale) { }
+
+    public ResourceLocalizationManager(Dictionary<string, Dictionary<string, string>> resources, string defaultLocale)
     {
+        _defaultLocale = defaultLocale;
         foreach ((string locale, Dictionary<string, string> sectionResources) in resources)
         {
             if (!_resourceData.ContainsKey(locale))
@@ -30,7 +34,8 @@ public class ResourceLocalizationManager : ILocalizationService
 
     public Task<string> GetLocalizedAsync(string key, string? keySection = null)
     {
-        return GetLocalizedAsync(key, AcceptLocales ?? throw new NoNullAllowedException(nameof(AcceptLocales)), keySection);
+        // Nothing requested (no Accept-Language, no tenant locale, or work outside a request): the default locale.
+        return GetLocalizedAsync(key, AcceptLocales ?? [], keySection);
     }
 
     public Task<string> GetLocalizedAsync(string key, ICollection<string> acceptLocales, string? keySection = null)

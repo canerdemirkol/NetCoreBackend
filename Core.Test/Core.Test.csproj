@@ -40,6 +40,8 @@
     <ProjectReference Include="..\Core.Mediation\Core.Mediation.csproj" />
     <ProjectReference Include="..\Core.Application\Core.Application.csproj" />
     <ProjectReference Include="..\Core.Localization.Resource.Yaml\Core.Localization.Resource.Yaml.csproj" />
+    <ProjectReference Include="..\Core.Localization.Translation\Core.Localization.Translation.csproj" />
+    <ProjectReference Include="..\Core.Localization.WebApi\Core.Localization.WebApi.csproj" />
     <ProjectReference Include="..\Core.Persistence\Core.Persistence.csproj" />
     <ProjectReference Include="..\Core.MultiTenancy\Core.MultiTenancy.csproj" />
     <ProjectReference Include="..\Core.Security\Core.Security.csproj" />
