@@ -20,8 +20,9 @@ This document describes all NuGet packages in the `NetCoreBackend.NArchitecture.
 8. [Translation](#8-translation)
 9. [Mailing](#9-mailing)
 10. [Outbox Pattern](#10-outbox-pattern)
-11. [ElasticSearch](#11-elasticsearch)
-12. [Typical Installation Scenarios](#12-typical-installation-scenarios)
+11. [Entity Change Log](#11-entity-change-log)
+12. [ElasticSearch](#12-elasticsearch)
+13. [Typical Installation Scenarios](#13-typical-installation-scenarios)
 
 ---
 
@@ -393,7 +394,23 @@ dotnet add package NetCoreBackend.NArchitecture.Core.Outbox.DependencyInjection
 
 ---
 
-## 11. ElasticSearch
+## 11. Entity Change Log
+
+### `Core.EntityChanges`
+
+Who changed which configured record, how, with the old and new value of each allow-listed property; written in the same `SaveChanges` as the change. Per-entity configuration classes (`IEntityChangeConfiguration<T>`) with `Track` / `Mask`; no "all properties" option. The consumer keeps the migration, the visibility filter, the append-only guard and the actor.
+
+```bash
+dotnet add package NetCoreBackend.NArchitecture.Core.EntityChanges
+```
+
+**Transitive dependencies:**
+- `Core.Persistence`
+- `Microsoft.EntityFrameworkCore.Relational`
+
+---
+
+## 12. ElasticSearch
 
 ### `Core.ElasticSearch`
 
@@ -408,7 +425,7 @@ dotnet add package NetCoreBackend.NArchitecture.Core.ElasticSearch
 
 ---
 
-## 12. Typical Installation Scenarios
+## 13. Typical Installation Scenarios
 
 ### Minimal WebAPI (Exception + Logging + Persistence + Security + MultiTenancy)
 
@@ -455,6 +472,16 @@ dotnet add package NetCoreBackend.NArchitecture.Core.Outbox.DependencyInjection
 
 ---
 
+### Adding the entity change log
+
+```bash
+dotnet add package NetCoreBackend.NArchitecture.Core.EntityChanges
+# Then: ConfigureEntityChanges() in OnModelCreating, one IEntityChangeConfiguration<T> per entity,
+# and EntityChangeModel.Collect(...) in your SaveChangesAsync (see the package README).
+```
+
+---
+
 ### Sending email
 
 ```bash
@@ -496,6 +523,9 @@ Core.CrossCuttingConcerns.Logging.Serilog.File
 Core.Outbox.DependencyInjection
   └── Core.Outbox
         └── Core.Persistence
+
+Core.EntityChanges
+  └── Core.Persistence
 
 Core.Localization.Resource.Yaml.DependencyInjection
   └── Core.Localization.Resource.Yaml

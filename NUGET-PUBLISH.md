@@ -184,6 +184,7 @@ NetCoreBackend.NArchitecture.Core.Translation.AmazonTranslate
 NetCoreBackend.NArchitecture.Core.Localization.Resource.Yaml
 NetCoreBackend.NArchitecture.Core.Localization.Translation
 NetCoreBackend.NArchitecture.Core.Outbox
+NetCoreBackend.NArchitecture.Core.EntityChanges
 ```
 
 ### Tier 3 — DI extensions and adapters (depends on Tier 1+2)

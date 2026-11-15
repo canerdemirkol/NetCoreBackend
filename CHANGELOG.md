@@ -7,6 +7,30 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [2026-11-15]
+
+### Core.EntityChanges 1.0.0 — New package
+
+An entity change log: which configured record changed, how and by whom, with the old and new value of each
+allow-listed property, written in the same `SaveChanges` as the change.
+
+#### Added
+
+- `Entities/EntityChange` and the stored enums `EntityChangeType`, `EntityChangeActorType`, `EntityChangeImpersonationKind`.
+- `EfPersistence/EfEntityChangeModelExtensions.ConfigureEntityChanges(modelBuilder, tableName)`: bounded columns, three indexes, no query filter.
+- `Abstractions/IEntityChangeConfiguration<T>` and `EntityChangeTypeBuilder<T>`: `HasName`, `ScopeBy`, `IdBy`, `Track`, `Mask` (property-level secret: "changed", no value, no hash), `FollowWhen`, `MaskAllWhen`.
+- `Model/EntityChangeModel`: `FromAssemblies`/`FromConfigurations` (refuses a configuration with no scope, no id, a repeated property, a nested property, or a repeated type or name), `Collect(entries)`.
+- `Values/EntityChangeValues`, `PropertyChange`: language-neutral values cut at 512 characters; the JSON row shape.
+- `Relations/RelationChangeTracker.TrackAsync`: before/after set comparison for bulk relation writes the change tracker cannot see.
+
+#### Notes for consumers
+
+- Allow list only: there is no "all properties" option; an entity without a configuration is never recorded.
+- The consumer keeps the migration, the tenant visibility filter, the append-only guard and the actor.
+- Tests: `Core.Test/EntityChanges/` (values and JSON contract, collector, model rules, relation tracker, table configuration).
+
+---
+
 ## [2026-10-26]
 
 ### Core.CrossCuttingConcerns.Exception.WebApi 1.0.2
