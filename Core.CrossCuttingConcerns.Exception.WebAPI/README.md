@@ -15,6 +15,7 @@ app.ConfigureCustomExceptionMiddleware(); // before UseRouting
 |---|---|---|
 | `BusinessException` | 400 | `BusinessProblemDetails` |
 | `ValidationException` | 400 | `ValidationProblemDetails` |
+| `ForbiddenException` | 403 | `ForbiddenProblemDetails` (`title`: "Forbidden") |
 | `AuthorizationException` | 401 | `AuthorizationProblemDetails` |
 | `NotFoundException` | 404 | `NotFoundProblemDetails` |
 | Other `Exception` | 500 | `InternalServerErrorProblemDetails` |

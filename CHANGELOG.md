@@ -7,6 +7,35 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [2026-11-16]
+
+### Core.CrossCuttingConcerns.Exception 1.1.0, Core.CrossCuttingConcerns.Exception.WebApi 1.1.0, Core.Application 3.1.0 — 401 / 403 split
+
+401 now means only "the caller is not known" (a client refreshes its token and retries); "known but not allowed" is 403,
+which a new token cannot fix.
+
+#### Added
+
+- `ForbiddenException : AuthorizationException` (Exception). Existing `catch (AuthorizationException)` blocks still see it.
+- `ExceptionHandler.HandleException(ForbiddenException)`: **virtual**, defaults to the `AuthorizationException` handler, so a
+  handler written before this release compiles and answers as before.
+- `HttpExceptionHandler` maps `ForbiddenException` to 403 with `ForbiddenProblemDetails` (`title`: "Forbidden") (Exception.WebApi).
+
+#### Changed
+
+- `AuthorizationBehavior`: a missing role throws `ForbiddenException` (403 with Exception.WebApi 1.1.0). No identity still
+  throws `AuthorizationException` (401). `TenantValidationBehavior` is unchanged (401): it can be reached with no identity.
+
+#### Notes for consumers
+
+- **HTTP behaviour change:** with Exception.WebApi 1.1.0, a request denied by a role check answers 403 instead of 401. A
+  client that refreshed its token on every 401 stops doing so for these requests. With an older Exception.WebApi the answer
+  stays 401.
+- Throw `ForbiddenException` for your own "known but not allowed" rules; keep `AuthorizationException` for "who are you?".
+- Tests: `Core.Test/CrossCuttingConcerns/ForbiddenExceptionTests.cs`.
+
+---
+
 ## [2026-11-15]
 
 ### Core.EntityChanges 1.0.0 — New package

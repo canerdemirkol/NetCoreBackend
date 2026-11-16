@@ -49,7 +49,7 @@ public class AuthorizationBehavior<TRequest, TResponse> : IPipelineBehavior<TReq
                 )
                 == null;
             if (isNotMatchedAUserRoleClaimWithRequestRoles)
-                throw new AuthorizationException("You are not authorized.");
+                throw new ForbiddenException("You are not authorized.");
         }
 
         TResponse response = await next(cancellationToken);

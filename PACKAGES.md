@@ -30,7 +30,7 @@ This document describes all NuGet packages in the `NetCoreBackend.NArchitecture.
 
 ### `Core.CrossCuttingConcerns.Exception`
 
-Domain exception types: `BusinessException`, `ValidationException`, `AuthorizationException`, `NotFoundException`, and the abstract `ExceptionHandler` infrastructure.
+Domain exception types: `BusinessException`, `ValidationException`, `AuthorizationException` (401), `ForbiddenException` (403), `NotFoundException`, and the abstract `ExceptionHandler` infrastructure.
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.Exception

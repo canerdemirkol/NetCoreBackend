@@ -11,6 +11,7 @@ public abstract class ExceptionHandler
     {
         BusinessException b => HandleException(b),
         ValidationException v => HandleException(v),
+        ForbiddenException f => HandleException(f),
         AuthorizationException a => HandleException(a),
         NotFoundException n => HandleException(n),
         _ => HandleUnknownException(exception)
@@ -19,6 +20,11 @@ public abstract class ExceptionHandler
     public abstract Task HandleException(BusinessException businessException);
     public abstract Task HandleException(ValidationException validationException);
     public abstract Task HandleException(AuthorizationException authorizationException);
+
+    // Virtual so a handler written before ForbiddenException existed still compiles and treats it as before.
+    public virtual Task HandleException(ForbiddenException forbiddenException) =>
+        HandleException((AuthorizationException)forbiddenException);
+
     public abstract Task HandleException(NotFoundException notFoundException);
     protected abstract Task HandleUnknownException(System.Exception exception);
 }

@@ -8,7 +8,7 @@ A behavior is activated by adding the relevant interface to the request:
 
 | Behavior | Interface | Description |
 |---|---|---|
-| `AuthorizationBehavior` | `ISecuredRequest` | Role-based authorization. SuperAdmin bypasses all checks (for SuperAdmin gating use `Roles = ["SuperAdmin"]`). |
+| `AuthorizationBehavior` | `ISecuredRequest` | Role-based authorization. SuperAdmin bypasses all checks (for SuperAdmin gating use `Roles = ["SuperAdmin"]`). No identity → `AuthorizationException` (401); a missing role → `ForbiddenException` (403). |
 | `SuperAdminBlockBehavior` | `IBlockedForSuperAdmin` | Rejects the request if a PlatformAdmin calls the endpoint (without impersonating). For tenant-user-only operations. |
 | `RequestValidationBehavior` | automatic | Request validation via FluentValidation (`ValidationException` → 400) |
 | `CachingBehavior` | `ICachableRequest` | Distributed cache. The tenant prefix is added to the key automatically. |
@@ -45,5 +45,5 @@ public class GetProductsQuery : IRequest<GetListResponse<ProductDto>>,
 
 - `Core.Security` — authorization and claim extensions
 - `Core.MultiTenancy` — ITenantContext and tenant claims
-- `Core.CrossCuttingConcerns.Exception` — AuthorizationException
+- `Core.CrossCuttingConcerns.Exception` — AuthorizationException, ForbiddenException
 - `Core.CrossCuttingConcerns.Logging` — LogDetail, LogParameter

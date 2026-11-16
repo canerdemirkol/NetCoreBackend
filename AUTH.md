@@ -334,7 +334,7 @@ public class ExitImpersonationCommandHandler : IRequestHandler<ExitImpersonation
 ```csharp
 // Option A — inline check in a handler
 if (_tenantContext.IsImpersonating)
-    throw new AuthorizationException("Write operations are disabled in impersonation mode.");
+    throw new ForbiddenException("Write operations are disabled in impersonation mode.");
 
 // Option B — dedicated pipeline behavior
 public class ImpersonationGuardBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
@@ -343,7 +343,7 @@ public class ImpersonationGuardBehavior<TRequest, TResponse> : IPipelineBehavior
     public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken ct)
     {
         if (_tenantContext.IsImpersonating)
-            throw new AuthorizationException("This operation is blocked during impersonation.");
+            throw new ForbiddenException("This operation is blocked during impersonation.");
         return await next();
     }
 }

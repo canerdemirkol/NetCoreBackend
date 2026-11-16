@@ -39,6 +39,13 @@ public class HttpExceptionHandler : ExceptionHandler
         return Response.WriteAsync(details);
     }
 
+    public override Task HandleException(ForbiddenException forbiddenException)
+    {
+        Response.StatusCode = StatusCodes.Status403Forbidden;
+        string details = new ForbiddenProblemDetails(forbiddenException.Message).ToJson();
+        return Response.WriteAsync(details);
+    }
+
     public override Task HandleException(NotFoundException notFoundException)
     {
         Response.StatusCode = StatusCodes.Status404NotFound;
