@@ -6,7 +6,7 @@
     <RootNamespace>NetCoreBackend.NArchitecture.$(AssemblyName)</RootNamespace>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <PackageId>NetCoreBackend.NArchitecture.$(AssemblyName)</PackageId>
-    <Version>3.1.0</Version>
+    <Version>3.2.0</Version>
     <Title>NetCoreBackend NArchitecture $(AssemblyName)</Title>
     <Description>Provide CQRS, Mediation, Pipelines, DTOs, and more for the Application Layer.</Description>
     <Product>NetCoreBackend NArchitecture</Product>

@@ -17,8 +17,13 @@ A behavior is activated by adding the relevant interface to the request:
 | `LoggingBehavior` | `ILoggableRequest` | Request/response logging. If `ISensitiveRequest` is implemented, the payload is logged as "[redacted]". |
 | `PerformanceBehavior` | `IIntervalRequest` | Slow request warning |
 | `TenantValidationBehavior` | `ITenantValidationRequest` | The request is rejected without a tenant context |
+| `FeatureRequirementBehavior` | `IFeatureRequest` | Runs only when every feature in `RequiredFeatures` is enabled for the caller's tenant (edition / tenant override); otherwise `ForbiddenException` (403). The host (super admin, not impersonating) is not checked; the host impersonating a tenant gets that tenant's features. Needs an app-provided `IFeatureChecker` only when a request uses the marker. |
 
 > **Cache key rule:** `ICachableRequest.CacheKey` must be **unique** within the consuming app. The framework prefixes keys in the `t:<tenantId>:<CacheKey>` format, but if different handlers use the same CacheKey value, you will experience cache collisions and deserialization errors. Convention: `"Products:GetAll"`, `"Products:ById:{id}"`, never a bare `"Products"`.
+
+> **`IFeatureChecker`:** the app implements `GetValueAsync(tenantId, featureName)` (its own definitions, editions and resolution
+> order). Core only asks; `IsEnabledAsync` treats only `"true"` (any case) as enabled. The tenant is explicit so background work and
+> limit checks can ask without a request.
 
 > **`ISensitiveRequest`:** Apply this to commands carrying data such as passwords, tokens, or credit cards — `LoggingBehavior` redacts the payload and logs only the request type.
 

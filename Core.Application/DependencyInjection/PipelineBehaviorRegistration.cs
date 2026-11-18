@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NetCoreBackend.NArchitecture.Core.Application.Pipelines.Authorization;
 using NetCoreBackend.NArchitecture.Core.Application.Pipelines.Caching;
+using NetCoreBackend.NArchitecture.Core.Application.Pipelines.Features;
 using NetCoreBackend.NArchitecture.Core.Application.Pipelines.Logging;
 using NetCoreBackend.NArchitecture.Core.Application.Pipelines.Performance;
 using NetCoreBackend.NArchitecture.Core.Application.Pipelines.Tenancy;
@@ -33,6 +34,8 @@ public static class PipelineBehaviorRegistration
         // behaviors (auth, validation) run before side-effecting ones (caching, transactions).
         services.AddScoped(typeof(IPipelineBehavior<,>), typeof(AuthorizationBehavior<,>));
         services.AddScoped(typeof(IPipelineBehavior<,>), typeof(TenantValidationBehavior<,>));
+        // Built only for IFeatureRequest requests, so apps that never mark one need no IFeatureChecker.
+        services.AddScoped(typeof(IPipelineBehavior<,>), typeof(FeatureRequirementBehavior<,>));
         services.AddScoped(typeof(IPipelineBehavior<,>), typeof(RequestValidationBehavior<,>));
         services.AddScoped(typeof(IPipelineBehavior<,>), typeof(CachingBehavior<,>));
         services.AddScoped(typeof(IPipelineBehavior<,>), typeof(CacheRemovingBehavior<,>));

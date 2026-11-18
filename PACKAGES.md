@@ -224,7 +224,7 @@ dotnet add package NetCoreBackend.NArchitecture.Core.MultiTenancy
 
 ### `Core.Application`
 
-CQRS pipeline behaviors: `AuthorizationBehavior`, `RequestValidationBehavior` (FluentValidation), `CachingBehavior`, `LoggingBehavior`, `TransactionScopeBehavior`, `PerformanceBehavior`, `TenantValidationBehavior`.
+CQRS pipeline behaviors: `AuthorizationBehavior`, `RequestValidationBehavior` (FluentValidation), `CachingBehavior`, `LoggingBehavior`, `TransactionScopeBehavior`, `PerformanceBehavior`, `TenantValidationBehavior`, `FeatureRequirementBehavior` (3.2.0: `IFeatureRequest` + app-provided `IFeatureChecker`).
 
 ```bash
 dotnet add package NetCoreBackend.NArchitecture.Core.Application

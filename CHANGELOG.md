@@ -7,6 +7,28 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [2026-11-18]
+
+### Core.Application 3.2.0 — feature requirements
+
+A request can say "run only when the tenant's package includes these features" (editions with limits and on/off modules).
+Core asks; the app owns the feature definitions, the editions and the resolution order.
+
+#### Added
+
+- `IFeatureChecker.GetValueAsync(tenantId, featureName)` (implemented by the app) and `IsEnabledAsync` (only `"true"`, any case).
+- `IFeatureRequest { string[] RequiredFeatures }` and `FeatureRequirementBehavior`, registered by `AddNArchitecturePipelineBehaviors`
+  after `TenantValidationBehavior`. A disabled feature, or no tenant, throws `ForbiddenException` (403). The host (super admin, not
+  impersonating) is not checked; impersonating a tenant applies that tenant's features.
+
+#### Notes for consumers
+
+- No change for apps that do not use `IFeatureRequest`: the behavior is built only for marked requests, so no `IFeatureChecker`
+  registration is needed (covered by a test).
+- Tests: `Core.Test/Application/FeatureRequirementBehaviorTests.cs`.
+
+---
+
 ## [2026-11-16]
 
 ### Core.CrossCuttingConcerns.Exception 1.1.0, Core.CrossCuttingConcerns.Exception.WebApi 1.1.0, Core.Application 3.1.0 — 401 / 403 split
