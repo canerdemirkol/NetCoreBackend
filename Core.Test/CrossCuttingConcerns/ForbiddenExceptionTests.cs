@@ -29,6 +29,24 @@ public class ForbiddenExceptionTests
     }
 
     [Fact]
+    public async Task AForbiddenRequestWithACode_CarriesTheCode_SoAClientCanTellTheReason()
+    {
+        (int status, string body) = await HandleAsync(new ForbiddenException("Subscription expired.") { Code = "SubscriptionExpired" });
+
+        Assert.Equal(StatusCodes.Status403Forbidden, status);
+        Assert.Contains("\"code\":\"SubscriptionExpired\"", body);
+        Assert.Contains("Subscription expired.", body);
+    }
+
+    [Fact]
+    public async Task AForbiddenRequestWithoutACode_HasNoCodeField()
+    {
+        (_, string body) = await HandleAsync(new ForbiddenException("Not allowed here."));
+
+        Assert.DoesNotContain("\"code\"", body);
+    }
+
+    [Fact]
     public async Task AnUnauthenticatedRequest_StillAnswers401()
     {
         (int status, string body) = await HandleAsync(new AuthorizationException("You are not authenticated."));

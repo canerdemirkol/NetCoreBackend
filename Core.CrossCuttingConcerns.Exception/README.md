@@ -9,7 +9,7 @@ Custom exception types and an abstract exception handler infrastructure for the 
 | `BusinessException` | 400 Bad Request | Business rule violation |
 | `ValidationException` | 400 Bad Request | FluentValidation errors |
 | `AuthorizationException` | 401 Unauthorized | The caller is not known (no identity, invalid or stale token); the client refreshes and retries |
-| `ForbiddenException` | 403 Forbidden | The caller is known but may not do this; derives from `AuthorizationException` |
+| `ForbiddenException` | 403 Forbidden | The caller is known but may not do this; derives from `AuthorizationException`; optional `Code` names the reason |
 | `NotFoundException` | 404 Not Found | Record not found |
 
 ## Usage

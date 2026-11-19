@@ -7,6 +7,29 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [2026-11-19]
+
+### Core.CrossCuttingConcerns.Exception 1.2.0, Core.CrossCuttingConcerns.Exception.WebApi 1.2.0, Core.MultiTenancy 2.1.0 — 403 reasons
+
+A client can tell why a request was refused (a deactivated tenant, an expired subscription) from a missing permission.
+
+#### Added
+
+- `ForbiddenException.Code` (optional, `init`): written to the ProblemDetails as `code`. Without it the 403 body is unchanged.
+- `ForbiddenProblemDetails(detail, code)`.
+
+#### Changed
+
+- `TenantMiddleware`: an inactive tenant's 403 is now `application/problem+json` (`title` "Forbidden", the same `detail` text,
+  `code` "TenantInactive", constant `TenantMiddleware.TenantInactiveCode`) instead of plain text. Clients that read the plain text
+  body should read `detail`.
+
+#### Notes for consumers
+
+- Tests: `Core.Test/CrossCuttingConcerns/ForbiddenExceptionTests.cs`, `Core.Test/MultiTenancy/TenantMiddlewareTests.cs`.
+
+---
+
 ## [2026-11-18]
 
 ### Core.Application 3.2.0 — feature requirements

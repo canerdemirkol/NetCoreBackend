@@ -42,7 +42,7 @@ public class HttpExceptionHandler : ExceptionHandler
     public override Task HandleException(ForbiddenException forbiddenException)
     {
         Response.StatusCode = StatusCodes.Status403Forbidden;
-        string details = new ForbiddenProblemDetails(forbiddenException.Message).ToJson();
+        string details = new ForbiddenProblemDetails(forbiddenException.Message, forbiddenException.Code).ToJson();
         return Response.WriteAsync(details);
     }
 

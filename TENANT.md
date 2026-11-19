@@ -99,7 +99,7 @@ Platform-wide shared data → Entity            (Countries, Currencies, Operatio
 | `Name` | `string` | Display name ("Acme Corp") |
 | `Identifier` | `string` | URL slug ("acme") — used for subdomain and header resolution |
 | `Domain` | `string?` | Custom domain ("app.acmecorp.com") |
-| `IsActive` | `bool` | Inactive tenants are rejected with 403 |
+| `IsActive` | `bool` | Inactive tenants are rejected with 403 ProblemDetails (`code`: `TenantInactive`) |
 | `PlanType` | `TenantPlanType` | Free / Basic / Pro / Enterprise |
 | `DefaultLocale` | `string?` | BCP 47 fallback locale ("tr", "de") — used when client sends no Accept-Language header |
 

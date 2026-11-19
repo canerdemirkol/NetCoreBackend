@@ -1,5 +1,7 @@
 using System.Net;
+using System.Text.Json;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using NetCoreBackend.NArchitecture.Core.MultiTenancy.Abstractions;
 using NetCoreBackend.NArchitecture.Core.MultiTenancy.Constants;
@@ -12,6 +14,9 @@ namespace NetCoreBackend.NArchitecture.Core.MultiTenancy.Middleware;
 public class TenantMiddleware
 {
     private const string TenantHeader = "X-Tenant-ID";
+    private const string TenantInactiveCodeKey = "code";
+    public const string TenantInactiveCode = "TenantInactive";
+    private const string ProblemJsonContentType = "application/problem+json";
 
     // Subdomains that must never resolve to a tenant slug, regardless of DB content.
     // Prevents www.app.com / api.app.com / cdn.app.com from being treated as tenants
@@ -72,8 +77,17 @@ public class TenantMiddleware
 
         if (!tenant.IsActive)
         {
+            // ProblemDetails with a code, so a client can tell a deactivated tenant from a missing permission.
+            var problem = new ProblemDetails
+            {
+                Title = "Forbidden",
+                Status = StatusCodes.Status403Forbidden,
+                Detail = $"Tenant '{tenant.Identifier}' is not active.",
+                Type = "about:blank",
+                Extensions = { [TenantInactiveCodeKey] = TenantInactiveCode },
+            };
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            await context.Response.WriteAsync($"Tenant '{tenant.Identifier}' is not active.");
+            await context.Response.WriteAsJsonAsync(problem, (JsonSerializerOptions?)null, ProblemJsonContentType);
             return;
         }
 

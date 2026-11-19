@@ -6,6 +6,9 @@ namespace NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.Exception.Types
 /// </summary>
 public class ForbiddenException : AuthorizationException
 {
+    /// <summary>Optional machine-readable reason (e.g. "SubscriptionExpired"); written to the ProblemDetails as <c>code</c>.</summary>
+    public string? Code { get; init; }
+
     public ForbiddenException() { }
 
     public ForbiddenException(string? message)
