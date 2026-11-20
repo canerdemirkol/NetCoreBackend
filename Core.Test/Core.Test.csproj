@@ -47,6 +47,8 @@
     <ProjectReference Include="..\Core.Security\Core.Security.csproj" />
     <ProjectReference Include="..\Core.Outbox\Core.Outbox.csproj" />
     <ProjectReference Include="..\Core.EntityChanges\Core.EntityChanges.csproj" />
+    <ProjectReference Include="..\Core.Payments\Core.Payments.csproj" />
+    <ProjectReference Include="..\Core.Payments.Simulator\Core.Payments.Simulator.csproj" />
     <ProjectReference Include="..\Core.CrossCuttingConcerns.Exception.WebAPI\Core.CrossCuttingConcerns.Exception.WebApi.csproj" />
   </ItemGroup>
 </Project>

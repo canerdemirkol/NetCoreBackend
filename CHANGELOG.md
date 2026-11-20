@@ -7,6 +7,34 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [2026-11-20]
+
+### Core.Payments 1.0.0-preview.1, Core.Payments.Simulator 1.0.0-preview.1 — payments (new, preview)
+
+Provider-independent payment building blocks and a simulator, so an application can run its whole payment flow without a real POS.
+Preview until each provider is verified in its sandbox (`--prerelease`).
+
+#### Added
+
+- `IPaymentProvider` (start, verify a notification without a network call, query, cancel, refund) with request and result types;
+  provider errors are results, not exceptions.
+- `Money` (minor units, one currency, rounding away from zero) and `VatSplit` (VAT-inclusive and -exclusive; net + VAT = total).
+- `PaymentOrderTransitions`: the order status table and the notification decision (paid; review on any amount, currency, order number
+  or merchant mismatch; late success after failed or abandoned; repeated notification has no effect; bad signature rejected).
+- `PaymentDataMasker`: card numbers removed (Luhn, also in free text), secrets starred, personal data moved out of the body.
+- Payment transaction log: `PaymentLogEntry` (20 steps), `IPaymentLogWriter`, `PaymentLogScope`, and `PaymentLoggingHandler`
+  (`AddPaymentLogging()`): a row before each provider call (a failed write stops the call), a row after the answer or failure;
+  header allow-list; a call outside a scope is refused.
+- Simulator: hosted-form and server-notification flows over an in-process HTTP gateway (so calls are logged like real ones),
+  HMAC-SHA256 signatures, magic card endings (0000, 0002–0007), `ISimulatorControl` (page, submit, held/double/tampered notification,
+  close the day); refused in Production.
+
+#### Notes for consumers
+
+- Docs: `PAYMENTS.md`, package READMEs. Tests: `Core.Test/Payments`.
+
+---
+
 ## [2026-11-19]
 
 ### Core.CrossCuttingConcerns.Exception 1.2.0, Core.CrossCuttingConcerns.Exception.WebApi 1.2.0, Core.MultiTenancy 2.1.0 — 403 reasons

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>NetCoreBackend.NArchitecture.$(AssemblyName)</RootNamespace>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <PackageId>NetCoreBackend.NArchitecture.$(AssemblyName)</PackageId>
+    <Version>1.0.0-preview.1</Version>
+    <Title>NetCoreBackend NArchitecture $(AssemblyName)</Title>
+    <Description>Payment provider contract, money and VAT, order status rules, masking, the payment transaction log model and an HTTP handler that logs every provider call. Preview until the providers are verified in their sandboxes.</Description>
+    <Product>NetCoreBackend NArchitecture</Product>
+    <Authors>Caner Demirkol, Contributors</Authors>
+    <Company></Company>
+    <PackageTags>Payments, Virtual POS, iyzico, PayTR, Payment Log, NArchitecture</PackageTags>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Http" />
+  </ItemGroup>
+</Project>

@@ -21,8 +21,9 @@ This document describes all NuGet packages in the `NetCoreBackend.NArchitecture.
 9. [Mailing](#9-mailing)
 10. [Outbox Pattern](#10-outbox-pattern)
 11. [Entity Change Log](#11-entity-change-log)
-12. [ElasticSearch](#12-elasticsearch)
-13. [Typical Installation Scenarios](#13-typical-installation-scenarios)
+12. [Payments (preview)](#12-payments-preview)
+13. [ElasticSearch](#13-elasticsearch)
+14. [Typical Installation Scenarios](#14-typical-installation-scenarios)
 
 ---
 
@@ -410,7 +411,40 @@ dotnet add package NetCoreBackend.NArchitecture.Core.EntityChanges
 
 ---
 
-## 12. ElasticSearch
+## 12. Payments (preview)
+
+`1.0.0-preview.N` until each provider is verified in its sandbox. See `PAYMENTS.md`.
+
+### `Core.Payments`
+
+Provider contract (`IPaymentProvider`: start, verify a notification, query, cancel, refund), `Money` and `VatSplit`, order status rules
+(`PaymentOrderTransitions`), masking (`PaymentDataMasker`), the payment transaction log model (`PaymentLogEntry`, `IPaymentLogWriter`) and
+`PaymentLoggingHandler`, which logs every provider HTTP call before sending and after the answer (`AddPaymentLogging()` on the provider's
+`HttpClient`). The consumer stores the log (append-only), the orders and the merchant accounts.
+
+```bash
+dotnet add package NetCoreBackend.NArchitecture.Core.Payments --prerelease
+```
+
+**Transitive dependencies:**
+- `Microsoft.Extensions.Http`
+
+### `Core.Payments.Simulator`
+
+A payment provider for development and tests (hosted form and server notification flows, real signatures, magic card endings, a control
+surface). `AddPaymentSimulator` throws in Production.
+
+```bash
+dotnet add package NetCoreBackend.NArchitecture.Core.Payments.Simulator --prerelease
+```
+
+**Transitive dependencies:**
+- `Core.Payments`
+- `Microsoft.Extensions.Hosting.Abstractions`
+
+---
+
+## 13. ElasticSearch
 
 ### `Core.ElasticSearch`
 
@@ -425,7 +459,7 @@ dotnet add package NetCoreBackend.NArchitecture.Core.ElasticSearch
 
 ---
 
-## 13. Typical Installation Scenarios
+## 14. Typical Installation Scenarios
 
 ### Minimal WebAPI (Exception + Logging + Persistence + Security + MultiTenancy)
 
@@ -526,6 +560,9 @@ Core.Outbox.DependencyInjection
 
 Core.EntityChanges
   └── Core.Persistence
+
+Core.Payments.Simulator
+  └── Core.Payments
 
 Core.Localization.Resource.Yaml.DependencyInjection
   └── Core.Localization.Resource.Yaml
