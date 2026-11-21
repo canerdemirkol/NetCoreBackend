@@ -20,8 +20,8 @@ package (never taken from a request).
 1. **Start.** The application computes the amount, stores the order as pending and commits; then, inside a `PaymentLogScope`, calls
    `StartAsync`. The result carries the provider token and the payment page (an address or a form's HTML).
 2. **Pay.** The user pays on the provider's page; card data never reaches the application.
-3. **Notification / return.** The application logs the raw message first, then `VerifyNotification` (signature with the order's own
-   merchant account; no network) and `PaymentOrderTransitions.Decide` against what it expected (order number, amount, merchant).
+3. **Notification / return.** The application logs the raw message first, finds the order it names with `ReferenceOf` (order number or
+   provider token, untrusted, no credentials needed), then `VerifyNotification` (signature with the order's own merchant account; no network) and `PaymentOrderTransitions.Decide` against what it expected (order number, amount, merchant).
    A paid notification that does not match goes to review; a repeated one has no effect; a bad signature is rejected.
 4. **Reconcile.** Pending orders are asked with `QueryAsync`; cancel before the day closes, refund after (partial refunds cannot exceed
    the payment).

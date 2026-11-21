@@ -13,11 +13,13 @@ public sealed class SimulatorPaymentProvider : IPaymentProvider
 {
     private readonly HttpClient _client;
     private readonly SimulatorBank _bank;
+    private readonly SimulatorOptions _options;
 
-    public SimulatorPaymentProvider(HttpClient client, SimulatorBank bank)
+    public SimulatorPaymentProvider(HttpClient client, SimulatorBank bank, SimulatorOptions options)
     {
         _client = client;
         _bank = bank;
+        _options = options;
     }
 
     public PaymentProviderName Name => PaymentProviderName.Simulator;
@@ -33,9 +35,12 @@ public sealed class SimulatorPaymentProvider : IPaymentProvider
             request.CallbackUrl, request.ReturnUrl, FlowOf(credentials).ToString(), request.Description, request.Buyer.Name, request.Buyer.Email),
             credentials, cancellationToken);
         return answer.Succeeded
-            ? new PaymentStartResult(true, answer.Token, null, null, null, null)
+            ? new PaymentStartResult(true, answer.Token, $"{_options.PageBaseUrl.TrimEnd('/')}/{answer.Token}", null, null, null)
             : PaymentStartResult.Failure(answer.ErrorCode!, answer.ErrorMessage);
     }
+
+    public PaymentMessageReference ReferenceOf(IncomingPaymentMessage message) =>
+        new(message.Fields.TryGetValue("order_no", out string? orderNo) && orderNo.Length > 0 ? orderNo : null, null);
 
     public NotificationVerification VerifyNotification(IncomingPaymentMessage message, MerchantCredentials credentials)
     {

@@ -81,6 +81,28 @@ public sealed class PaymentSimulatorTests : IDisposable
     private static string Card(string last4) => "400000000000" + last4;
 
     [Fact]
+    public async Task Start_GivesThePaymentPageAddress_LikeARealProvider()
+    {
+        PaymentStartResult started = await _provider.StartAsync(new PaymentStartRequest("ORD-PAGE-1", Hundred,
+            new PaymentBuyer("U-1", "Ayşe Yılmaz", "ayse@test.local", null, null, null, "10.0.0.1"),
+            "https://app.test/api/payments/callback/simulator", "https://app.test/api/payments/return/simulator", "Pro, aylık"), Merchant(), CancellationToken.None);
+
+        Assert.Equal($"{PageBase}/{started.ProviderToken}", started.PaymentPageUrl);
+    }
+
+    [Fact]
+    public void ReferenceOf_ReadsTheOrderNumber_BeforeAnyCredentialIsKnown()
+    {
+        var message = new IncomingPaymentMessage(new Dictionary<string, string> { ["order_no"] = "ORD-REF-1", ["hash"] = "unchecked" }, new Dictionary<string, string>());
+
+        PaymentMessageReference reference = _provider.ReferenceOf(message);
+
+        Assert.Equal(new PaymentMessageReference("ORD-REF-1", null), reference);
+        Assert.Equal(new PaymentMessageReference(null, null),
+            _provider.ReferenceOf(new IncomingPaymentMessage(new Dictionary<string, string>(), new Dictionary<string, string>())));
+    }
+
+    [Fact]
     public async Task TheHostedForm_GivesAPage_AndASignedReturn_ThatVerifies()
     {
         MerchantCredentials merchant = Merchant();

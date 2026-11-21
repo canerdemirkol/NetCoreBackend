@@ -7,6 +7,23 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [2026-11-21]
+
+### Core.Payments 1.0.0-preview.2, Core.Payments.Simulator 1.0.0-preview.2 — found while the application consumed them
+
+#### Added
+
+- `IPaymentProvider.ReferenceOf(IncomingPaymentMessage)` → `PaymentMessageReference(OrderNo, ProviderToken)`: which order a message
+  names, read before its signature is checked (the signature needs that order's merchant account). Each provider knows its own field
+  (simulator `order_no`; PayTR `merchant_oid`, iyzico a token later). **Breaking for implementers** (preview).
+
+#### Fixed
+
+- The simulator's `StartAsync` returns the payment page address (`{PageBaseUrl}/{token}`) in `PaymentPageUrl`, like a real provider;
+  it was empty.
+
+---
+
 ## [2026-11-20]
 
 ### Core.Payments 1.0.0-preview.1, Core.Payments.Simulator 1.0.0-preview.1 — payments (new, preview)

@@ -58,6 +58,12 @@ public sealed record PaymentStartResult(
 /// <summary>A notification or a browser return as it arrived: its fields and the allow-listed headers.</summary>
 public sealed record IncomingPaymentMessage(IReadOnlyDictionary<string, string> Fields, IReadOnlyDictionary<string, string> Headers);
 
+/// <summary>
+/// Which order an incoming message names, read before its signature is checked (the signature needs the order's own merchant account):
+/// our order number, or the provider's token when the message carries only that. Untrusted until verified.
+/// </summary>
+public sealed record PaymentMessageReference(string? OrderNo, string? ProviderToken);
+
 public enum PaymentResultKind
 {
     Paid,
@@ -121,6 +127,9 @@ public interface IPaymentProvider
     PaymentCapabilities Capabilities { get; }
 
     Task<PaymentStartResult> StartAsync(PaymentStartRequest request, MerchantCredentials credentials, CancellationToken cancellationToken);
+
+    /// <summary>Reads which order a message names, without credentials and without trusting it; no network call.</summary>
+    PaymentMessageReference ReferenceOf(IncomingPaymentMessage message);
 
     /// <summary>Checks the signature and reads the message; no network call.</summary>
     NotificationVerification VerifyNotification(IncomingPaymentMessage message, MerchantCredentials credentials);
