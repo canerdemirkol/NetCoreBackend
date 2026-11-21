@@ -26,6 +26,11 @@ package (never taken from a request).
 4. **Reconcile.** Pending orders are asked with `QueryAsync`; cancel before the day closes, refund after (partial refunds cannot exceed
    the payment).
 
+## Periods and upgrades
+
+`BillingCalendar.EndOf` gives a period's end (calendar month or year, anchor day kept, host time zone); `Proration.UpgradePrice` the
+price of a dearer edition for the time left. The application decides what is sold (which edition, purchase or extension) and when.
+
 ## The payment transaction log
 
 Every step is a row (`PaymentLogStep`, 20 steps: order created, consent, start request and response, page issued, page event, return,

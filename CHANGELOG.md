@@ -7,6 +7,21 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [2026-11-21] (2)
+
+### Core.Payments 1.0.0-preview.3 — calendar periods and proration
+
+#### Added
+
+- `Billing.BillingPeriod` (Monthly, Annual) and `BillingCalendar.EndOf(start, period, anchorDay, timeZone)`: the anchor day of the next
+  month (or that month's last day; 31 January → 28/29 February → 31 March) or the same day next year, counted in the given time zone;
+  `AnchorDayOf(start, timeZone)`.
+- `Proration.UpgradePrice(currentPeriodPrice, newPeriodPrice, remaining, periodLength)`: the difference per period for the time left,
+  in minor units; nothing when no time is left; a cheaper edition is refused.
+- Tests: `Core.Test/Payments/BillingTests` (13).
+
+---
+
 ## [2026-11-21]
 
 ### Core.Payments 1.0.0-preview.2, Core.Payments.Simulator 1.0.0-preview.2 — found while the application consumed them
