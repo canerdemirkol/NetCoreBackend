@@ -11,6 +11,9 @@ public sealed class SimulatedPayment
     public required string ReturnUrl { get; init; }
     public required SimulatorFlow Flow { get; init; }
     public required string Description { get; init; }
+    public bool StoreCard { get; init; }
+    public string? OwnerKey { get; internal set; }
+    public string? StoredCardToken { get; internal set; }
     public ProviderPaymentState State { get; internal set; } = ProviderPaymentState.Pending;
     public string? PaymentId { get; internal set; }
     public string? TransactionId { get; internal set; }

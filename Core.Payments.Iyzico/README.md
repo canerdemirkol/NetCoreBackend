@@ -9,6 +9,11 @@ iyzico for `Core.Payments`: the Checkout Form (iyzico's hosted payment page) ove
   (HMAC-SHA256 of the documented fields). A webhook's `X-IYZ-SIGNATURE-V3` header is checked when present.
   A declined card comes back unsigned (`status: failure`, `paymentStatus: FAILURE`, a `paymentId`) and is read as a failed payment;
   `QueryAsync` reads it the same way.
+- Stored cards (`IStoredCardPaymentProvider`): the Checkout Form result's `cardUserKey` and `cardToken` (when the merchant's card storage
+  is on and the customer kept the card) come back as `StoredCard`; a start may pass the customer's `cardUserKey`. `ChargeStoredCardAsync`
+  calls `/payment/auth` without 3D (`paymentGroup: SUBSCRIPTION`) and believes a paid answer only with its signature
+  (`paymentId:currency:basketId:conversationId:paidPrice:price`); a declined card (status `failure` with a `paymentId`, unsigned) is a
+  failed payment. `DeleteStoredCardAsync` calls `DELETE /cardstorage/card`. Verified in the sandbox (2026-11-23).
 - `QueryAsync` (`/payment/detail`), `CancelAsync` (same day, whole amount), `RefundAsync` (by item transaction; by payment when the
   transaction id is unknown).
 - Credentials: `MerchantId` = iyzico merchant id, `ApiKey`, `SecretKey`. `PaymentEnvironment.Test` calls the sandbox address, `Live` the live one.

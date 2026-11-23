@@ -25,6 +25,11 @@ package (never taken from a request).
    A paid notification that does not match goes to review; a repeated one has no effect; a bad signature is rejected.
 4. **Reconcile.** Pending orders are asked with `QueryAsync`; cancel before the day closes, refund after (partial refunds cannot exceed
    the payment).
+5. **Renew (stored card).** A provider with `PaymentCapabilities.Recurring` implements `IStoredCardPaymentProvider`. The first payment
+   is started with `StoreCard` (and the customer's earlier `StoredCardOwnerKey`); its verified result names the stored card. At the
+   period's end the application charges it with `ChargeStoredCardAsync` (no page, no 3D, answered at once: Paid or Failed is the
+   provider's verdict, a failed call is unknown and is asked again with `QueryAsync`) and deletes it with `DeleteStoredCardAsync` when the
+   customer turns renewal off. Log steps 21 and 22.
 
 ## Periods and upgrades
 
@@ -68,7 +73,10 @@ if (!environment.IsProduction())
 - **Flows** (per merchant, `Extra["flow"]`): `HostedForm` (the page posts a signed result to the return address, like iyzico) and
   `ServerNotification` (a signed notification is posted to the callback address and answered "OK", like PayTR).
 - **Card endings:** `0000` paid · `0002` declined · `0003` 3D failed · `0004` notification with another amount · `0005` notification held
-  back · `0006` notification sent twice · `0007` tampered signature · anything else fails.
+  back · `0006` notification sent twice · `0007` tampered signature · `0008` paid, declined when charged again as a stored card · anything
+  else fails.
+- **Stored cards:** a payment started with `StoreCard` keeps the card; the result carries `card_user_key` and `card_token` (signed). The
+  books are in memory: a restarted simulator has no stored cards (`card_not_found`).
 - **Control** (`ISimulatorControl`): render the page, submit a card, send a held notification (or twice, or tampered), close the day.
 - Calls go to an in-process HTTP gateway (`https://simulator.payments.local/`), signed with the merchant's secret (the first secret a
   merchant uses; a later different secret is refused), so they pass `PaymentLoggingHandler` like a real provider's.

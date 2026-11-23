@@ -16,4 +16,8 @@ public sealed record NotificationVerification(
     string? CardLast4,
     string? CardFamily,
     int? Installment,
-    string? ResponseToProvider);
+    string? ResponseToProvider)
+{
+    /// <summary>The card the payment stored at the provider, when it stored one.</summary>
+    public StoredCardDetails? StoredCard { get; init; }
+}

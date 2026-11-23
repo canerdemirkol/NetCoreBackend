@@ -10,6 +10,7 @@ public sealed class SimulatorBank
     private readonly Dictionary<string, string> _secrets = [];
     private readonly Dictionary<string, SimulatedPayment> _byToken = [];
     private readonly Dictionary<string, SimulatedPayment> _byOrder = [];
+    private readonly Dictionary<string, SimulatedCard> _cards = [];
     private const int RunIdLength = 8;
     // The books are lost when the process ends and the sequence starts again; the run id keeps ids unique across restarts, since an
     // application keeps a provider's payment id unique per merchant account.
@@ -55,6 +56,24 @@ public sealed class SimulatorBank
     {
         lock (_lock)
             return _byOrder.GetValueOrDefault(Key(merchantId, orderNo));
+    }
+
+    internal void AddCard(SimulatedCard card)
+    {
+        lock (_lock)
+            _cards[card.Token] = card;
+    }
+
+    internal SimulatedCard? CardOf(string merchantId, string ownerKey, string token)
+    {
+        lock (_lock)
+            return _cards.GetValueOrDefault(token) is SimulatedCard card && card.MerchantId == merchantId && card.OwnerKey == ownerKey ? card : null;
+    }
+
+    internal bool RemoveCard(string merchantId, string ownerKey, string token)
+    {
+        lock (_lock)
+            return CardOf(merchantId, ownerKey, token) is not null && _cards.Remove(token);
     }
 
     internal IReadOnlyList<SimulatedPayment> All()

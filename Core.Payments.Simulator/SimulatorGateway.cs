@@ -37,6 +37,8 @@ public sealed class SimulatorGateway : HttpMessageHandler
             "/api/query" => Query(merchantId, JsonSerializer.Deserialize<GatewayReference>(body, Json)!),
             "/api/cancel" => Cancel(merchantId, JsonSerializer.Deserialize<GatewayReference>(body, Json)!),
             "/api/refund" => Refund(merchantId, JsonSerializer.Deserialize<GatewayReference>(body, Json)!),
+            "/api/charge" => Charge(merchantId, JsonSerializer.Deserialize<GatewayCharge>(body, Json)!),
+            "/api/card/delete" => DeleteCard(merchantId, JsonSerializer.Deserialize<GatewayCard>(body, Json)!),
             _ => new GatewayAnswer(false, "not_found"),
         };
         return Answer(answer.ErrorCode == "not_found" ? HttpStatusCode.NotFound : HttpStatusCode.OK, answer);
@@ -56,6 +58,8 @@ public sealed class SimulatorGateway : HttpMessageHandler
             ReturnUrl = start.ReturnUrl,
             Flow = Enum.Parse<SimulatorFlow>(start.Flow),
             Description = start.Description,
+            StoreCard = start.StoreCard,
+            OwnerKey = start.CardUserKey,
         });
         return new GatewayAnswer(true, Token: payment.Token);
     }
@@ -99,6 +103,41 @@ public sealed class SimulatorGateway : HttpMessageHandler
             return new GatewayAnswer(true, Reference: _bank.NextId("SIM-R"));
         }
     }
+
+    // A stored card's ending decides: 0008 (paid at first) is declined on renewal; the other paying endings pay.
+    private GatewayAnswer Charge(string merchantId, GatewayCharge charge)
+    {
+        if (_bank.CardOf(merchantId, charge.CardUserKey, charge.CardToken) is not SimulatedCard card)
+            return new GatewayAnswer(false, "card_not_found", "No such stored card.");
+        if (_bank.ByOrder(merchantId, charge.OrderNo) is not null)
+            return new GatewayAnswer(false, "duplicate_order", "This order number was already used.");
+        string? error = card.Last4 == SimulatorControl.DeclinedOnRenewalEnding ? "card_declined" : null;
+        SimulatedPayment payment = _bank.Add(token => new SimulatedPayment
+        {
+            Token = token,
+            OrderNo = charge.OrderNo,
+            MerchantId = merchantId,
+            Amount = new Money(charge.AmountMinor, charge.Currency),
+            CallbackUrl = "",
+            ReturnUrl = "",
+            Flow = SimulatorFlow.HostedForm,
+            Description = charge.Description,
+        });
+        lock (_bank.Lock)
+        {
+            payment.CardLast4 = card.Last4;
+            payment.State = error is null ? ProviderPaymentState.Paid : ProviderPaymentState.Failed;
+            payment.PaymentId = _bank.NextId("SIM-P");
+            payment.TransactionId = error is null ? _bank.NextId("SIM-T") : null;
+        }
+        return new GatewayAnswer(true, error, State: payment.State.ToString(), AmountMinor: charge.AmountMinor, Currency: charge.Currency,
+            PaymentId: payment.PaymentId, TransactionId: payment.TransactionId);
+    }
+
+    private GatewayAnswer DeleteCard(string merchantId, GatewayCard card) =>
+        _bank.RemoveCard(merchantId, card.CardUserKey, card.CardToken)
+            ? new GatewayAnswer(true, Reference: _bank.NextId("SIM-D"))
+            : new GatewayAnswer(false, "card_not_found", "No such stored card.");
 
     private static string? Header(HttpRequestMessage request, string name) =>
         request.Headers.TryGetValues(name, out IEnumerable<string>? values) ? values.FirstOrDefault() : null;

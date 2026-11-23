@@ -7,10 +7,12 @@ namespace NetCoreBackend.NArchitecture.Core.Payments.Simulator;
 
 /// <summary>
 /// The card endings: 0000 paid, 0002 declined, 0003 3D failed, 0004 paid but the notification says another amount, 0005 notification
-/// held back, 0006 notification sent twice, 0007 tampered signature; any other ending fails ("unknown_test_card").
+/// held back, 0006 notification sent twice, 0007 tampered signature, 0008 paid but declined when the stored card is charged again; any
+/// other ending fails ("unknown_test_card").
 /// </summary>
 public sealed class SimulatorControl : ISimulatorControl
 {
+    internal const string DeclinedOnRenewalEnding = "0008";
     private const int AmountDifferenceMinor = 100;
     private const string TamperedHash = "tampered";
     private static readonly HtmlEncoder Html = HtmlEncoder.Create(UnicodeRanges.All);
@@ -41,7 +43,8 @@ public sealed class SimulatorControl : ISimulatorControl
             + "<input id=\"card\" name=\"cardNumber\" value=\"4000000000000000\" inputmode=\"numeric\" style=\"display:block;width:100%;box-sizing:border-box;padding:10px;margin:4px 0 12px;font-size:16px\">"
             + "<button type=\"submit\" style=\"width:100%;padding:12px;background:#1f4fd1;color:#fff;border:0;border-radius:8px;font-size:15px\">Öde</button></form>"
             + "<p style=\"font-size:12px;color:#5b6676;line-height:1.6\">Son dört hane sonucu seçer: 0000 başarılı · 0002 ret · 0003 3D başarısız · "
-            + "0004 farklı tutar · 0005 gecikmeli bildirim · 0006 çift bildirim · 0007 bozuk imza.</p></main></body></html>";
+            + "0004 farklı tutar · 0005 gecikmeli bildirim · 0006 çift bildirim · 0007 bozuk imza · 0008 başarılı, saklı kartla yenilemede ret.</p>"
+            + "</main></body></html>";
     }
 
     public async Task<SimulatorSubmitResult> SubmitCardAsync(string token, string cardNumber, CancellationToken cancellationToken)
@@ -51,7 +54,7 @@ public sealed class SimulatorControl : ISimulatorControl
         string last4 = digits.Length >= 4 ? digits[^4..] : digits;
         (bool paid, string? error) = last4 switch
         {
-            "0000" or "0004" or "0005" or "0006" or "0007" => (true, (string?)null),
+            "0000" or "0004" or "0005" or "0006" or "0007" or DeclinedOnRenewalEnding => (true, (string?)null),
             "0002" => (false, "card_declined"),
             "0003" => (false, "3ds_failed"),
             _ => (false, "unknown_test_card"),
@@ -67,6 +70,12 @@ public sealed class SimulatorControl : ISimulatorControl
             {
                 payment.PaymentId = _bank.NextId("SIM-P");
                 payment.TransactionId = _bank.NextId("SIM-T");
+                if (payment.StoreCard)
+                {
+                    payment.OwnerKey ??= _bank.NextId("SIM-U");
+                    payment.StoredCardToken = _bank.NextId("SIM-CARD");
+                    _bank.AddCard(new SimulatedCard(payment.MerchantId, payment.OwnerKey, payment.StoredCardToken, last4));
+                }
             }
             message = Message(payment, error, last4 == "0004" ? AmountDifferenceMinor : 0, tamper: last4 == "0007");
         }
@@ -119,6 +128,11 @@ public sealed class SimulatorControl : ISimulatorControl
             ["installment_count"] = "1",
             ["flow"] = payment.Flow.ToString(),
         };
+        if (payment.StoredCardToken is not null)
+        {
+            fields["card_user_key"] = payment.OwnerKey!;
+            fields["card_token"] = payment.StoredCardToken;
+        }
         string secret = _bank.SecretOf(payment.MerchantId) ?? "";
         fields[SimulatorSignature.HashField] = tamper ? TamperedHash : SimulatorSignature.Compute(secret, fields);
         return fields;

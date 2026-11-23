@@ -302,9 +302,9 @@ public class IyzicoPaymentProviderTests
     }
 
     [Fact]
-    public void TheCapabilities_AreCancelRefundsAndQueries()
+    public void TheCapabilities_AreCancelRefundsQueriesAndStoredCards()
     {
-        Assert.Equal(PaymentCapabilities.Cancel | PaymentCapabilities.Refund | PaymentCapabilities.PartialRefund | PaymentCapabilities.StatusQuery,
-            Provider().Provider.Capabilities);
+        Assert.Equal(PaymentCapabilities.Cancel | PaymentCapabilities.Refund | PaymentCapabilities.PartialRefund | PaymentCapabilities.StatusQuery
+            | PaymentCapabilities.Recurring, Provider().Provider.Capabilities);
     }
 }

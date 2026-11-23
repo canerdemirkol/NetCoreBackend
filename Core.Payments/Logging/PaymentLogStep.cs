@@ -23,4 +23,6 @@ public enum PaymentLogStep
     MarkedPaidManually = 18,
     UnmatchedMessage = 19,
     Error = 20,
+    StoredCardCharge = 21,
+    StoredCardDeleted = 22,
 }

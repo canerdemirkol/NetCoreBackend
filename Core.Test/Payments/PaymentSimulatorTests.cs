@@ -3,6 +3,7 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using NetCoreBackend.NArchitecture.Core.Payments;
 using NetCoreBackend.NArchitecture.Core.Payments.Logging;
+using NetCoreBackend.NArchitecture.Core.Payments.Masking;
 using NetCoreBackend.NArchitecture.Core.Payments.Simulator;
 
 namespace Core.Test.Payments;
@@ -178,6 +179,114 @@ public sealed class PaymentSimulatorTests : IDisposable
 
         Assert.Equal((0, 1, 3), (afterDelayed, afterRelease, afterDouble));
         Assert.False((await _provider.VerifyNotificationAsync(new IncomingPaymentMessage(_sender.Sent[^1].Fields, new Dictionary<string, string>()), merchant, CancellationToken.None)).SignatureValid);
+    }
+
+    // E13-13: a payment started with StoreCard keeps the card; a renewal charges it and the card ending decides (0008: paid now, declined
+    // later); a deleted or unknown card cannot be charged.
+    private async Task<(string OrderNo, NotificationVerification Verified)> PayAndStoreAsync(MerchantCredentials merchant, string last4, string? ownerKey = null)
+    {
+        string orderNo = $"ORD-{Guid.NewGuid():N}"[..16];
+        PaymentStartResult started = await _provider.StartAsync(new PaymentStartRequest(orderNo, Hundred, Buyer,
+            "https://app.test/api/payments/callback/simulator", "https://app.test/api/payments/return/simulator", "Pro, aylık")
+            { StoreCard = true, StoredCardOwnerKey = ownerKey }, merchant, CancellationToken.None);
+        SimulatorSubmitResult submitted = await _control.SubmitCardAsync(started.ProviderToken!, Card(last4), CancellationToken.None);
+        return (orderNo, await _provider.VerifyNotificationAsync(new IncomingPaymentMessage(submitted.ReturnFields, new Dictionary<string, string>()), merchant,
+            CancellationToken.None));
+    }
+
+    private Task<PaymentStatusResult> ChargeAsync(MerchantCredentials merchant, StoredCardReference card, string orderNo) =>
+        ((IStoredCardPaymentProvider)_provider).ChargeStoredCardAsync(new StoredCardCharge(orderNo, Hundred, Buyer, "Pro, aylık yenileme", card), merchant,
+            CancellationToken.None);
+
+    [Fact]
+    public async Task APaymentThatStoresTheCard_NamesIt_InItsSignedResult()
+    {
+        MerchantCredentials merchant = Merchant();
+
+        (_, NotificationVerification verified) = await PayAndStoreAsync(merchant, "0000");
+        (_, NotificationVerification again) = await PayAndStoreAsync(merchant, "0000", verified.StoredCard!.Reference.OwnerKey);
+        (_, NotificationVerification unstored) = await StartAndPayWithoutStoringAsync(merchant);
+
+        Assert.True(verified.SignatureValid);
+        Assert.Equal(("0000", "Visa"), (verified.StoredCard.Last4, verified.StoredCard.Family));
+        Assert.Equal(verified.StoredCard.Reference.OwnerKey, again.StoredCard!.Reference.OwnerKey);
+        Assert.NotEqual(verified.StoredCard.Reference.CardToken, again.StoredCard.Reference.CardToken);
+        Assert.Null(unstored.StoredCard);
+        Assert.True(_provider.Capabilities.HasFlag(PaymentCapabilities.Recurring));
+    }
+
+    private async Task<(string OrderNo, NotificationVerification Verified)> StartAndPayWithoutStoringAsync(MerchantCredentials merchant)
+    {
+        (string orderNo, string token) = await StartAsync(merchant);
+        SimulatorSubmitResult submitted = await _control.SubmitCardAsync(token, Card("0000"), CancellationToken.None);
+        return (orderNo, await _provider.VerifyNotificationAsync(new IncomingPaymentMessage(submitted.ReturnFields, new Dictionary<string, string>()), merchant,
+            CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task AStoredCard_IsCharged_AndTheChargeIsAPaymentLikeAnyOther()
+    {
+        MerchantCredentials merchant = Merchant();
+        (_, NotificationVerification first) = await PayAndStoreAsync(merchant, "0000");
+
+        PaymentStatusResult renewed = await ChargeAsync(merchant, first.StoredCard!.Reference, "ORD-RENEW-1");
+        PaymentStatusResult queried = await _provider.QueryAsync(new PaymentReference("ORD-RENEW-1", null, null), merchant, CancellationToken.None);
+
+        Assert.True(renewed.Succeeded);
+        Assert.Equal((ProviderPaymentState.Paid, Hundred), (renewed.State, renewed.Amount));
+        Assert.StartsWith("SIM-P-", renewed.ProviderPaymentId);
+        Assert.Equal(ProviderPaymentState.Paid, queried.State);
+    }
+
+    [Fact]
+    public async Task ACardEndingIn0008_PaysNow_ButIsDeclinedOnRenewal()
+    {
+        MerchantCredentials merchant = Merchant();
+        (_, NotificationVerification first) = await PayAndStoreAsync(merchant, "0008");
+
+        PaymentStatusResult renewed = await ChargeAsync(merchant, first.StoredCard!.Reference, "ORD-RENEW-2");
+
+        Assert.Equal(PaymentResultKind.Paid, first.Result);
+        Assert.True(renewed.Succeeded);
+        Assert.Equal((ProviderPaymentState.Failed, "card_declined"), (renewed.State, renewed.ErrorCode));
+    }
+
+    // The two keys can charge the card: the log stars them in every message the simulator sends or answers (as iyzico's are).
+    [Fact]
+    public async Task TheStoredCardsKeys_AreStarredInEveryLoggedMessage()
+    {
+        MerchantCredentials merchant = Merchant();
+        string orderNo = $"ORD-{Guid.NewGuid():N}"[..16];
+        PaymentStartResult started = await _provider.StartAsync(new PaymentStartRequest(orderNo, Hundred, Buyer,
+            "https://app.test/api/payments/callback/simulator", "https://app.test/api/payments/return/simulator", "Pro, aylık") { StoreCard = true },
+            merchant, CancellationToken.None);
+        SimulatorSubmitResult submitted = await _control.SubmitCardAsync(started.ProviderToken!, Card("0000"), CancellationToken.None);
+        StoredCardReference card = (await _provider.VerifyNotificationAsync(new IncomingPaymentMessage(submitted.ReturnFields,
+            new Dictionary<string, string>()), merchant, CancellationToken.None)).StoredCard!.Reference;
+
+        await ChargeAsync(merchant, card, "ORD-RENEW-LOG");
+        await ((IStoredCardPaymentProvider)_provider).DeleteStoredCardAsync(card, merchant, CancellationToken.None);
+        string returned = PaymentDataMasker.MaskFields(submitted.ReturnFields).Body ?? "";
+
+        Assert.All(_log.Entries.Select(e => e.Body ?? "").Append(returned), body =>
+        {
+            Assert.DoesNotContain(card.OwnerKey, body);
+            Assert.DoesNotContain(card.CardToken, body);
+        });
+    }
+
+    [Fact]
+    public async Task ADeletedCard_CannotBeCharged()
+    {
+        MerchantCredentials merchant = Merchant();
+        (_, NotificationVerification first) = await PayAndStoreAsync(merchant, "0000");
+
+        PaymentActionResult deleted = await ((IStoredCardPaymentProvider)_provider).DeleteStoredCardAsync(first.StoredCard!.Reference, merchant, CancellationToken.None);
+        PaymentStatusResult renewed = await ChargeAsync(merchant, first.StoredCard.Reference, "ORD-RENEW-3");
+
+        Assert.True(deleted.Succeeded);
+        Assert.False(renewed.Succeeded);
+        Assert.Equal("card_not_found", renewed.ErrorCode);
     }
 
     [Fact]

@@ -7,6 +7,37 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [2026-11-23] (3)
+
+### Core.Payments.Simulator 1.0.0-preview.6 — the stored card's keys are starred in the log
+
+#### Fixed
+
+- preview.5 named the card's owner key `card_owner_key` / `ownerKey` and answered a delete with the card token, so the payment log showed
+  them (found by the application's E2E leak test). The simulator now uses iyzico's names (`card_user_key` / `cardUserKey`, `card_token` /
+  `cardToken`), which the log stars, and a delete answers with its own reference. Test: `PaymentSimulatorTests` (1).
+
+---
+
+## [2026-11-23] (2)
+
+### Core.Payments 1.0.0-preview.6, Core.Payments.Iyzico 1.0.0-preview.4, Core.Payments.Simulator 1.0.0-preview.5 — stored cards
+
+#### Added
+
+- `IStoredCardPaymentProvider` (`ChargeStoredCardAsync`, `DeleteStoredCardAsync`), `StoredCardCharge`, `StoredCardReference`,
+  `StoredCardDetails`. `PaymentStartRequest.StoreCard` and `StoredCardOwnerKey`; `NotificationVerification.StoredCard`. Init-only
+  properties: existing callers and `IPaymentProvider` implementers (PayTR) are unchanged. `PaymentLogStep.StoredCardCharge` (21) and
+  `StoredCardDeleted` (22); `cardUserKey` is starred in the payment log.
+- iyzico: `Recurring`. The Checkout Form result's card keys, `cardUserKey` on the start, `/payment/auth` without 3D for a renewal
+  (signature checked; a declined card is a failed payment), `DELETE /cardstorage/card`. Paths in `IyzicoOptions`
+  (`StoredCardChargePath`, `StoredCardPath`).
+- Simulator: `Recurring`; stored cards, charges and deletes; card ending `0008` (paid, declined on renewal). The message signature now
+  covers `card_user_key` and `card_token`.
+- Tests: `IyzicoStoredCardTests` (10), simulator (4), sandbox (2: a stored card charged, signed and deleted; a declined one).
+
+---
+
 ## [2026-11-23]
 
 ### Core.Payments.Iyzico 1.0.0-preview.3 — a declined card is a failed payment

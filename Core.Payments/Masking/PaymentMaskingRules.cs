@@ -8,7 +8,7 @@ public sealed record PaymentMaskingRules(IReadOnlySet<string> SecretFields, IRea
 {
     public static readonly PaymentMaskingRules Default = new(
         Normalized("apiKey", "secretKey", "secret", "password", "hash", "signature", "token", "paytrToken", "merchantKey", "merchantSalt",
-            "authorization", "conversationData", "cardToken", "cvc", "cvv", "expireMonth", "expireYear", "cardHolderName"),
+            "authorization", "conversationData", "cardToken", "cardUserKey", "cvc", "cvv", "expireMonth", "expireYear", "cardHolderName"),
         Normalized("name", "surname", "fullName", "email", "phone", "gsmNumber", "address", "registrationAddress", "identityNumber", "userName",
             "userAddress", "userPhone", "contactName"));
 

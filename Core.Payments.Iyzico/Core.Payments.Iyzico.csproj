@@ -6,7 +6,7 @@
     <RootNamespace>NetCoreBackend.NArchitecture.$(AssemblyName)</RootNamespace>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <PackageId>NetCoreBackend.NArchitecture.$(AssemblyName)</PackageId>
-    <Version>1.0.0-preview.3</Version>
+    <Version>1.0.0-preview.4</Version>
     <Title>NetCoreBackend NArchitecture $(AssemblyName)</Title>
     <Description>iyzico (Checkout Form) for Core.Payments: hosted payment page, result retrieval with response signatures, status query, cancel and refund over the IYZWSv2 HMAC API. Preview until verified in the sandbox.</Description>
     <Product>NetCoreBackend NArchitecture</Product>

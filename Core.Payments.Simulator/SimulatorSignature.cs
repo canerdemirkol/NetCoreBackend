@@ -9,7 +9,8 @@ public static class SimulatorSignature
 {
     public const string HashField = "hash";
     private static readonly string[] SignedFields =
-        ["merchant_id", "order_no", "status", "total_amount", "currency", "payment_id", "transaction_id", "failed_reason_code"];
+        ["merchant_id", "order_no", "status", "total_amount", "currency", "payment_id", "transaction_id", "failed_reason_code", "card_user_key",
+            "card_token"];
 
     public static string Compute(string secret, IReadOnlyDictionary<string, string> fields) =>
         Hmac(secret, string.Join("|", SignedFields.Select(f => fields.GetValueOrDefault(f) ?? "")));

@@ -8,9 +8,10 @@ namespace NetCoreBackend.NArchitecture.Core.Payments.Iyzico;
 /// <summary>
 /// iyzico's Checkout Form (docs.iyzico.com). A payment opens iyzico's hosted page; the browser comes back with a token only, so the result is
 /// retrieved by token and believed only when the answer's signature matches. Every call is an IYZWSv2-signed JSON request through the
-/// client's handlers (the payment log). Provider errors are results.
+/// client's handlers (the payment log). Provider errors are results. A renewal charges the card iyzico stored at the first payment
+/// (/payment/auth, no 3D) and is believed only with its signature.
 /// </summary>
-public sealed class IyzicoPaymentProvider : IPaymentProvider
+public sealed class IyzicoPaymentProvider : IStoredCardPaymentProvider
 {
     /// <summary>iyzico requires an identity number; a company (10-digit tax number) or an unknown one is sent as this.</summary>
     public const string PlaceholderIdentityNumber = "11111111111";
@@ -24,6 +25,10 @@ public sealed class IyzicoPaymentProvider : IPaymentProvider
     private const string Locale = "tr";
     private const string BasketCategory = "Subscription";
     private const string VirtualItem = "VIRTUAL";
+    private const string ProductGroup = "PRODUCT";
+    private const string SubscriptionGroup = "SUBSCRIPTION";
+    private const string WebChannel = "WEB";
+    private const int SingleInstallment = 1;
     private const string Succeeded = "success";
     private const string PaymentSucceeded = "SUCCESS";
     private const string PaymentFailed = "FAILURE";
@@ -42,7 +47,8 @@ public sealed class IyzicoPaymentProvider : IPaymentProvider
     public PaymentProviderName Name => PaymentProviderName.Iyzico;
 
     public PaymentCapabilities Capabilities =>
-        PaymentCapabilities.Cancel | PaymentCapabilities.Refund | PaymentCapabilities.PartialRefund | PaymentCapabilities.StatusQuery;
+        PaymentCapabilities.Cancel | PaymentCapabilities.Refund | PaymentCapabilities.PartialRefund | PaymentCapabilities.StatusQuery
+        | PaymentCapabilities.Recurring;
 
     public async Task<PaymentStartResult> StartAsync(PaymentStartRequest request, MerchantCredentials credentials, CancellationToken cancellationToken)
     {
@@ -52,10 +58,6 @@ public sealed class IyzicoPaymentProvider : IPaymentProvider
             return PaymentStartResult.Failure(BuyerIncompleteCode, "The buyer lacks: " + string.Join(", ", missing));
 
         string price = IyzicoPrice.Format(request.Amount.Amount);
-        var address = new JsonObject
-        {
-            ["contactName"] = buyer.FullName, ["city"] = buyer.City, ["country"] = buyer.Country, ["address"] = buyer.Address, ["zipCode"] = buyer.PostalCode,
-        };
         var body = new JsonObject
         {
             ["locale"] = Locale,
@@ -64,30 +66,17 @@ public sealed class IyzicoPaymentProvider : IPaymentProvider
             ["paidPrice"] = price,
             ["currency"] = request.Amount.Currency,
             ["basketId"] = request.OrderNo,
-            ["paymentGroup"] = "PRODUCT",
+            ["paymentGroup"] = ProductGroup,
             // The browser returns here with the token (iyzico's "callbackUrl").
             ["callbackUrl"] = request.ReturnUrl,
             ["enabledInstallments"] = new JsonArray(Enumerable.Range(1, Math.Max(1, request.MaxInstallment)).Select(i => (JsonNode)i).ToArray()),
-            ["buyer"] = new JsonObject
-            {
-                ["id"] = buyer.Id,
-                ["name"] = buyer.FirstName,
-                ["surname"] = buyer.LastName,
-                ["identityNumber"] = IdentityNumberOf(buyer),
-                ["email"] = buyer.Email,
-                ["gsmNumber"] = buyer.Phone,
-                ["registrationAddress"] = buyer.Address,
-                ["city"] = buyer.City,
-                ["country"] = buyer.Country,
-                ["zipCode"] = buyer.PostalCode,
-                ["ip"] = buyer.Ip,
-            },
-            ["billingAddress"] = address,
-            ["basketItems"] = new JsonArray(new JsonObject
-            {
-                ["id"] = request.OrderNo, ["name"] = request.Description, ["category1"] = BasketCategory, ["itemType"] = VirtualItem, ["price"] = price,
-            }),
+            ["buyer"] = BuyerOf(buyer),
+            ["billingAddress"] = AddressOf(buyer),
+            ["basketItems"] = BasketOf(request.OrderNo, request.Description, price),
         };
+        // The customer's earlier cards stay under one key at iyzico.
+        if (request.StoredCardOwnerKey is not null)
+            body["cardUserKey"] = request.StoredCardOwnerKey;
 
         using JsonDocument? answer = await PostAsync(_options.CheckoutFormInitializePath, body, credentials, cancellationToken);
         if (answer is null)
@@ -137,7 +126,66 @@ public sealed class IyzicoPaymentProvider : IPaymentProvider
         Money? amount = paidPrice is decimal paid ? Money.Of(paid, Text(a, "currency") ?? Money.DefaultCurrency) : null;
         return new NotificationVerification(true, Text(a, "basketId") ?? Text(a, "conversationId"), credentials.MerchantId, result, amount,
             Text(a, "paymentId"), FirstTransactionId(a), Text(a, "errorCode"), Text(a, "lastFourDigits"), Text(a, "cardFamily"), Integer(a, "installment"),
-            null);
+            null)
+        {
+            StoredCard = StoredCardOf(a),
+        };
+    }
+
+    public async Task<PaymentStatusResult> ChargeStoredCardAsync(StoredCardCharge charge, MerchantCredentials credentials, CancellationToken cancellationToken)
+    {
+        string[] missing = MissingBuyerFields(charge.Buyer);
+        if (missing.Length > 0)
+            return PaymentStatusResult.Failure(BuyerIncompleteCode, "The buyer lacks: " + string.Join(", ", missing));
+
+        string price = IyzicoPrice.Format(charge.Amount.Amount);
+        var body = new JsonObject
+        {
+            ["locale"] = Locale,
+            ["conversationId"] = charge.OrderNo,
+            ["price"] = price,
+            ["paidPrice"] = price,
+            ["currency"] = charge.Amount.Currency,
+            ["installment"] = SingleInstallment,
+            ["basketId"] = charge.OrderNo,
+            ["paymentChannel"] = WebChannel,
+            ["paymentGroup"] = SubscriptionGroup,
+            ["paymentCard"] = new JsonObject { ["cardUserKey"] = charge.Card.OwnerKey, ["cardToken"] = charge.Card.CardToken },
+            ["buyer"] = BuyerOf(charge.Buyer),
+            ["billingAddress"] = AddressOf(charge.Buyer),
+            ["basketItems"] = BasketOf(charge.OrderNo, charge.Description, price),
+        };
+
+        using JsonDocument? answer = await PostAsync(_options.StoredCardChargePath, body, credentials, cancellationToken);
+        if (answer is null)
+            return PaymentStatusResult.Failure(ProviderBaseAddress.InvalidCode, InvalidAddressMessage);
+        JsonElement a = answer.RootElement;
+        // A declined card: status "failure" with the payment's id and no signature (the sandbox, 2026-11-23). Without a payment id the
+        // result is unknown and the caller asks again.
+        if (Text(a, "status") != Succeeded)
+            return Text(a, "paymentId") is string declinedId
+                ? new PaymentStatusResult(true, ProviderPaymentState.Failed, null, declinedId, null, Text(a, "errorCode"), Text(a, "errorMessage"))
+                : PaymentStatusResult.Failure(Text(a, "errorCode") ?? EmptyAnswerCode, Text(a, "errorMessage"));
+
+        decimal? paidPrice = IyzicoPrice.Read(Get(a, "paidPrice"));
+        string expected = IyzicoSignature.Compute(credentials.SecretKey, Text(a, "paymentId") ?? "", Text(a, "currency") ?? "", Text(a, "basketId") ?? "",
+            Text(a, "conversationId") ?? "", Price(paidPrice), Price(IyzicoPrice.Read(Get(a, "price"))));
+        if (!IyzicoSignature.Matches(expected, Text(a, "signature")))
+            return PaymentStatusResult.Failure(SignatureMismatchCode, "The answer's signature does not match.");
+
+        // A payment held for a fraud review is not paid yet; the status query settles it later.
+        ProviderPaymentState state = Integer(a, "fraudStatus") is null or FraudApproved ? ProviderPaymentState.Paid : ProviderPaymentState.Pending;
+        Money? amount = paidPrice is decimal paid ? Money.Of(paid, Text(a, "currency") ?? Money.DefaultCurrency) : null;
+        return new PaymentStatusResult(true, state, amount, Text(a, "paymentId"), FirstTransactionId(a), null, null);
+    }
+
+    public async Task<PaymentActionResult> DeleteStoredCardAsync(StoredCardReference card, MerchantCredentials credentials, CancellationToken cancellationToken)
+    {
+        var body = new JsonObject { ["locale"] = Locale, ["cardUserKey"] = card.OwnerKey, ["cardToken"] = card.CardToken };
+        using JsonDocument? answer = await SendAsync(HttpMethod.Delete, _options.StoredCardPath, body, credentials, cancellationToken);
+        return answer is null
+            ? PaymentActionResult.Failure(ProviderBaseAddress.InvalidCode, InvalidAddressMessage)
+            : Action(answer.RootElement, null);
     }
 
     public async Task<PaymentStatusResult> QueryAsync(PaymentReference reference, MerchantCredentials credentials, CancellationToken cancellationToken)
@@ -224,6 +272,38 @@ public sealed class IyzicoPaymentProvider : IPaymentProvider
         }.Where(f => string.IsNullOrWhiteSpace(f.Value)).Select(f => f.Name),
     ];
 
+    private static JsonObject BuyerOf(PaymentBuyer buyer) => new()
+    {
+        ["id"] = buyer.Id,
+        ["name"] = buyer.FirstName,
+        ["surname"] = buyer.LastName,
+        ["identityNumber"] = IdentityNumberOf(buyer),
+        ["email"] = buyer.Email,
+        ["gsmNumber"] = buyer.Phone,
+        ["registrationAddress"] = buyer.Address,
+        ["city"] = buyer.City,
+        ["country"] = buyer.Country,
+        ["zipCode"] = buyer.PostalCode,
+        ["ip"] = buyer.Ip,
+    };
+
+    private static JsonObject AddressOf(PaymentBuyer buyer) => new()
+    {
+        ["contactName"] = buyer.FullName, ["city"] = buyer.City, ["country"] = buyer.Country, ["address"] = buyer.Address, ["zipCode"] = buyer.PostalCode,
+    };
+
+    private static JsonArray BasketOf(string orderNo, string description, string price) => new(new JsonObject
+    {
+        ["id"] = orderNo, ["name"] = description, ["category1"] = BasketCategory, ["itemType"] = VirtualItem, ["price"] = price,
+    });
+
+    // The Checkout Form names the card it stored (the merchant's card storage is on and the customer kept the card).
+    private static StoredCardDetails? StoredCardOf(JsonElement answer) =>
+        Text(answer, "cardUserKey") is string owner && Text(answer, "cardToken") is string token
+            ? new StoredCardDetails(new StoredCardReference(owner, token), Text(answer, "lastFourDigits"), Text(answer, "cardFamily"),
+                Text(answer, "cardAssociation"))
+            : null;
+
     private static string IdentityNumberOf(PaymentBuyer buyer) =>
         buyer.IdentityNumber is { Length: IdentityNumberLength } number && number.All(char.IsAsciiDigit) ? number : PlaceholderIdentityNumber;
 
@@ -252,13 +332,17 @@ public sealed class IyzicoPaymentProvider : IPaymentProvider
             : PaymentActionResult.Failure(Text(answer, "errorCode") ?? EmptyAnswerCode, Text(answer, "errorMessage"));
 
     // Null when the account's own address is refused (not HTTPS, or the live API on a test account): nothing is sent.
-    private async Task<JsonDocument?> PostAsync(string path, JsonObject payload, MerchantCredentials credentials, CancellationToken cancellationToken)
+    private Task<JsonDocument?> PostAsync(string path, JsonObject payload, MerchantCredentials credentials, CancellationToken cancellationToken) =>
+        SendAsync(HttpMethod.Post, path, payload, credentials, cancellationToken);
+
+    private async Task<JsonDocument?> SendAsync(HttpMethod method, string path, JsonObject payload, MerchantCredentials credentials,
+        CancellationToken cancellationToken)
     {
         if (!ProviderBaseAddress.TryResolve(credentials, _options.BaseAddressFor(credentials.Environment), _options.LiveBaseAddress, out Uri? baseAddress))
             return null;
         string body = payload.ToJsonString(Json);
         string randomKey = IyzicoAuthorization.NewRandomKey();
-        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(baseAddress!, path))
+        using var request = new HttpRequestMessage(method, new Uri(baseAddress!, path))
         {
             Content = new StringContent(body, Encoding.UTF8, "application/json"),
         };

@@ -9,7 +9,7 @@ namespace NetCoreBackend.NArchitecture.Core.Payments.Simulator;
 /// The simulated provider. Every call is a signed HTTP request to <see cref="SimulatorGateway"/> through the client's handlers, so it is
 /// logged like a real provider's; notifications are verified with the same HMAC the simulator signs them with.
 /// </summary>
-public sealed class SimulatorPaymentProvider : IPaymentProvider
+public sealed class SimulatorPaymentProvider : IStoredCardPaymentProvider
 {
     private readonly HttpClient _client;
     private readonly SimulatorBank _bank;
@@ -25,14 +25,16 @@ public sealed class SimulatorPaymentProvider : IPaymentProvider
     public PaymentProviderName Name => PaymentProviderName.Simulator;
 
     public PaymentCapabilities Capabilities =>
-        PaymentCapabilities.Cancel | PaymentCapabilities.Refund | PaymentCapabilities.PartialRefund | PaymentCapabilities.StatusQuery;
+        PaymentCapabilities.Cancel | PaymentCapabilities.Refund | PaymentCapabilities.PartialRefund | PaymentCapabilities.StatusQuery
+        | PaymentCapabilities.Recurring;
 
     public async Task<PaymentStartResult> StartAsync(PaymentStartRequest request, MerchantCredentials credentials, CancellationToken cancellationToken)
     {
         // The first secret a merchant uses is the one the simulated provider knows (trust on first use).
         _bank.EnsureMerchant(credentials.MerchantId, credentials.SecretKey);
         GatewayAnswer answer = await CallAsync("api/start", new GatewayStart(request.OrderNo, request.Amount.Minor, request.Amount.Currency,
-            request.CallbackUrl, request.ReturnUrl, FlowOf(credentials).ToString(), request.Description, request.Buyer.FullName, request.Buyer.Email),
+            request.CallbackUrl, request.ReturnUrl, FlowOf(credentials).ToString(), request.Description, request.Buyer.FullName, request.Buyer.Email,
+            request.StoreCard, request.StoredCardOwnerKey),
             credentials, cancellationToken);
         return answer.Succeeded
             ? new PaymentStartResult(true, answer.Token, $"{_options.PageBaseUrl.TrimEnd('/')}/{answer.Token}", null, null, null)
@@ -60,8 +62,26 @@ public sealed class SimulatorPaymentProvider : IPaymentProvider
         };
         return Task.FromResult(new NotificationVerification(valid, Field("order_no"), Field("merchant_id"), result, amount, Field("payment_id"),
             Field("transaction_id"), Field("failed_reason_code"), Field("card_last4"), Field("card_family"),
-            int.TryParse(Field("installment_count"), CultureInfo.InvariantCulture, out int installment) ? installment : null, "OK"));
+            int.TryParse(Field("installment_count"), CultureInfo.InvariantCulture, out int installment) ? installment : null, "OK")
+        {
+            StoredCard = Field("card_user_key") is string owner && Field("card_token") is string card
+                ? new StoredCardDetails(new StoredCardReference(owner, card), Field("card_last4"), Field("card_family"), null)
+                : null,
+        });
     }
+
+    public async Task<PaymentStatusResult> ChargeStoredCardAsync(StoredCardCharge charge, MerchantCredentials credentials, CancellationToken cancellationToken)
+    {
+        GatewayAnswer answer = await CallAsync("api/charge", new GatewayCharge(charge.OrderNo, charge.Amount.Minor, charge.Amount.Currency,
+            charge.Card.OwnerKey, charge.Card.CardToken, charge.Description), credentials, cancellationToken);
+        return answer.Succeeded
+            ? new PaymentStatusResult(true, Enum.Parse<ProviderPaymentState>(answer.State!), new Money(answer.AmountMinor!.Value, answer.Currency!),
+                answer.PaymentId, answer.TransactionId, answer.ErrorCode, answer.ErrorMessage)
+            : PaymentStatusResult.Failure(answer.ErrorCode!, answer.ErrorMessage);
+    }
+
+    public async Task<PaymentActionResult> DeleteStoredCardAsync(StoredCardReference card, MerchantCredentials credentials, CancellationToken cancellationToken) =>
+        Action(await CallAsync("api/card/delete", new GatewayCard(card.OwnerKey, card.CardToken), credentials, cancellationToken));
 
     public async Task<PaymentStatusResult> QueryAsync(PaymentReference reference, MerchantCredentials credentials, CancellationToken cancellationToken)
     {

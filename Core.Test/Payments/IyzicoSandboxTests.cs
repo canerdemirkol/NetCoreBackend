@@ -48,6 +48,59 @@ public class IyzicoSandboxTests
         Assert.NotEqual(IyzicoPaymentProvider.SignatureMismatchCode, verified.ErrorCode);
     }
 
+    // A card is stored here through iyzico's card storage call with a sandbox test card (the application never sees a card number: its
+    // cards are stored by the Checkout Form). Then the provider charges it as a renewal, reads a declined card, and deletes the card.
+    private static async Task<StoredCardReference> StoreTestCardAsync(string cardNumber)
+    {
+        const string path = "/cardstorage/card";
+        string body = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            locale = "tr", conversationId = "sandbox-store", email = "ayse@example.com", externalId = "sandbox-tests",
+            card = new { cardAlias = "sandbox", cardHolderName = "Ayse Yilmaz", cardNumber, expireMonth = "12", expireYear = "2030" },
+        });
+        MerchantCredentials sandbox = Sandbox();
+        string randomKey = IyzicoAuthorization.NewRandomKey();
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(new IyzicoOptions().SandboxBaseAddress, path))
+        {
+            Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json"),
+        };
+        request.Headers.Add(IyzicoAuthorization.RandomKeyHeader, randomKey);
+        request.Headers.TryAddWithoutValidation("Authorization", IyzicoAuthorization.Header(sandbox.ApiKey, sandbox.SecretKey, randomKey, path, body));
+        using var client = new HttpClient();
+        using System.Text.Json.JsonDocument answer = System.Text.Json.JsonDocument.Parse(await (await client.SendAsync(request)).Content.ReadAsStringAsync());
+        return new StoredCardReference(answer.RootElement.GetProperty("cardUserKey").GetString()!, answer.RootElement.GetProperty("cardToken").GetString()!);
+    }
+
+    private static StoredCardCharge Renewal(StoredCardReference card) => new(NewOrderNo(), Money.Of(100.5m), Start("unused").Buyer, "Pro, aylık yenileme", card);
+
+    [IyzicoSandboxFact]
+    public async Task AStoredCard_IsChargedAsARenewal_WithAValidSignature_ThenDeleted()
+    {
+        IyzicoPaymentProvider provider = Provider();
+        StoredCardReference card = await StoreTestCardAsync("5528790000000008");
+
+        PaymentStatusResult charged = await provider.ChargeStoredCardAsync(Renewal(card), Sandbox(), CancellationToken.None);
+        PaymentActionResult deleted = await provider.DeleteStoredCardAsync(card, Sandbox(), CancellationToken.None);
+
+        Assert.True(charged.Succeeded, $"{charged.ErrorCode}: {charged.ErrorMessage}");
+        Assert.Equal((ProviderPaymentState.Paid, Money.Of(100.5m)), (charged.State, charged.Amount));
+        Assert.False(string.IsNullOrEmpty(charged.ProviderTransactionId));
+        Assert.True(deleted.Succeeded, $"{deleted.ErrorCode}: {deleted.ErrorMessage}");
+    }
+
+    [IyzicoSandboxFact]
+    public async Task AStoredCardWithoutFunds_IsAFailedPayment()
+    {
+        IyzicoPaymentProvider provider = Provider();
+        StoredCardReference card = await StoreTestCardAsync("4111111111111129");
+
+        PaymentStatusResult charged = await provider.ChargeStoredCardAsync(Renewal(card), Sandbox(), CancellationToken.None);
+        await provider.DeleteStoredCardAsync(card, Sandbox(), CancellationToken.None);
+
+        Assert.True(charged.Succeeded, $"{charged.ErrorCode}: {charged.ErrorMessage}");
+        Assert.Equal((ProviderPaymentState.Failed, "10051"), (charged.State, charged.ErrorCode));
+    }
+
     [IyzicoSandboxFact]
     public async Task AnUnknownOrder_IsAnErrorResult()
     {

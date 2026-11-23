@@ -5,6 +5,10 @@ Provider-independent payment building blocks for a virtual POS integration. **Pr
 - `IPaymentProvider`: start a payment (hosted page or token), verify a notification or return (`VerifyNotificationAsync`: a signed message is
   checked without a network call; a token-only return such as iyzico's is retrieved and its signed answer checked), query the status,
   cancel, refund (full or partial). Stateless: credentials come with every call; base addresses are fixed in the provider package.
+- `IStoredCardPaymentProvider` (`PaymentCapabilities.Recurring`): a payment started with `StoreCard` names the card the provider kept
+  (`NotificationVerification.StoredCard`: owner key, card token, last four digits, family); `ChargeStoredCardAsync` charges it later
+  with no customer present (a renewal; the answer comes at once), `DeleteStoredCardAsync` deletes it. A separate contract: a provider
+  without stored cards implements nothing. The two keys can charge the card: keep them encrypted (the log stars them).
 - `PaymentBuyer`: first and last name, e-mail, phone, billing address, city, country, postal code, identity number and IP; a provider that
   needs a field left empty refuses the start with an error result. Providers: `Core.Payments.Iyzico`, `Core.Payments.PayTr`, and
   `Core.Payments.Simulator` for development and tests.
