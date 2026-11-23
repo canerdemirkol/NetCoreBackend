@@ -7,6 +7,8 @@ iyzico for `Core.Payments`: the Checkout Form (iyzico's hosted payment page) ove
   token and `paymentPageUrl`. The browser comes back to the request's `ReturnUrl` with the token.
 - `VerifyNotificationAsync`: retrieves the form's result by token and believes it only when the answer's `signature` matches
   (HMAC-SHA256 of the documented fields). A webhook's `X-IYZ-SIGNATURE-V3` header is checked when present.
+  A declined card comes back unsigned (`status: failure`, `paymentStatus: FAILURE`, a `paymentId`) and is read as a failed payment;
+  `QueryAsync` reads it the same way.
 - `QueryAsync` (`/payment/detail`), `CancelAsync` (same day, whole amount), `RefundAsync` (by item transaction; by payment when the
   transaction id is unknown).
 - Credentials: `MerchantId` = iyzico merchant id, `ApiKey`, `SecretKey`. `PaymentEnvironment.Test` calls the sandbox address, `Live` the live one.

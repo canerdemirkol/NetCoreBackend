@@ -165,6 +165,57 @@ public class IyzicoPaymentProviderTests
         Assert.Equal((PaymentResultKind.Failed, "10051"), (verified.Result, verified.ErrorCode));
     }
 
+    // As the sandbox answers a declined card (recorded 2026-11-23): status "failure", no signature, but a payment and its status.
+    private const string Declined =
+        """{"status":"failure","errorCode":"10051","errorMessage":"Kart limiti yetersiz, yetersiz bakiye","errorGroup":"NOT_SUFFICIENT_FUNDS","locale":"tr","systemTime":1,"paymentId":"39083934","basketId":"PO20261123A7K3Q9","conversationId":"PO20261123A7K3Q9","mdStatus":1,"token":"tok-3","paymentStatus":"FAILURE"}""";
+
+    private const string CallError = """{"status":"failure","errorCode":"5145","errorMessage":"Geçersiz token","locale":"tr","systemTime":1}""";
+
+    [Fact]
+    public async Task ADeclinedCard_OnTheReturn_IsAFailedPayment_NotARefusal()
+    {
+        (IyzicoPaymentProvider provider, _) = Provider(Declined);
+
+        NotificationVerification verified = await provider.VerifyNotificationAsync(ReturnWith("tok-3"), Sandbox, CancellationToken.None);
+
+        Assert.True(verified.SignatureValid);
+        Assert.Equal((OrderNo, PaymentResultKind.Failed, "10051", "39083934"), (verified.OrderNo, verified.Result, verified.ErrorCode, verified.ProviderPaymentId));
+        Assert.Null(verified.Amount);
+    }
+
+    [Fact]
+    public async Task AnErrorWithoutAPaymentStatus_OnTheReturn_IsStillRefused()
+    {
+        (IyzicoPaymentProvider provider, _) = Provider(CallError);
+
+        NotificationVerification verified = await provider.VerifyNotificationAsync(ReturnWith("tok-3"), Sandbox, CancellationToken.None);
+
+        Assert.False(verified.SignatureValid);
+        Assert.Equal("5145", verified.ErrorCode);
+    }
+
+    [Fact]
+    public async Task ADeclinedCard_OnTheStatusQuery_IsAFailedPayment()
+    {
+        (IyzicoPaymentProvider provider, _) = Provider(Declined);
+
+        PaymentStatusResult status = await provider.QueryAsync(new PaymentReference(OrderNo, null, null), Sandbox, CancellationToken.None);
+
+        Assert.True(status.Succeeded);
+        Assert.Equal((ProviderPaymentState.Failed, "39083934", "10051"), (status.State, status.ProviderPaymentId, status.ErrorCode));
+    }
+
+    [Fact]
+    public async Task AnErrorWithoutAPaymentStatus_OnTheStatusQuery_IsStillAFailedQuery()
+    {
+        (IyzicoPaymentProvider provider, _) = Provider(CallError);
+
+        PaymentStatusResult status = await provider.QueryAsync(new PaymentReference(OrderNo, null, null), Sandbox, CancellationToken.None);
+
+        Assert.False(status.Succeeded);
+        Assert.Equal("5145", status.ErrorCode);
+    }
+
     [Fact]
     public async Task AReturnWithoutAToken_IsRefusedWithoutACall()
     {

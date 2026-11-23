@@ -7,6 +7,21 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [2026-11-23]
+
+### Core.Payments.Iyzico 1.0.0-preview.3 — a declined card is a failed payment
+
+#### Fixed
+
+- A declined card (e.g. `10051` insufficient funds) is answered by iyzico with `status: "failure"`, the `paymentId` and
+  `paymentStatus: "FAILURE"`, and no signature. `VerifyNotificationAsync` and `QueryAsync` read it as a failed payment (with its error
+  code) instead of a refused message or a failed query, so the order no longer waits until it expires. It is believed unsigned: the answer
+  comes from our own HTTPS call, and a failure gives nothing away; a paid result still needs its signature. An error without a payment
+  status (bad token, wrong keys) is unchanged.
+- Tests: `Core.Test/Payments/IyzicoPaymentProviderTests` (4 new).
+
+---
+
 ## [2026-11-21] (2)
 
 ### Core.Payments 1.0.0-preview.3 — calendar periods and proration

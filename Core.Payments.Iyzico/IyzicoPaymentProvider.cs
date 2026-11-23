@@ -114,6 +114,9 @@ public sealed class IyzicoPaymentProvider : IPaymentProvider
         if (answer is null)
             return Refused(ProviderBaseAddress.InvalidCode);
         JsonElement a = answer.RootElement;
+        if (IsDeclined(a))
+            return new NotificationVerification(true, Text(a, "basketId") ?? Text(a, "conversationId"), credentials.MerchantId, PaymentResultKind.Failed,
+                null, Text(a, "paymentId"), null, Text(a, "errorCode"), null, null, null, null);
         if (Text(a, "status") != Succeeded)
             return Refused(Text(a, "errorCode") ?? EmptyAnswerCode);
 
@@ -149,6 +152,8 @@ public sealed class IyzicoPaymentProvider : IPaymentProvider
         if (answer is null)
             return PaymentStatusResult.Failure(ProviderBaseAddress.InvalidCode, InvalidAddressMessage);
         JsonElement a = answer.RootElement;
+        if (IsDeclined(a))
+            return new PaymentStatusResult(true, ProviderPaymentState.Failed, null, Text(a, "paymentId"), null, Text(a, "errorCode"), Text(a, "errorMessage"));
         if (Text(a, "status") != Succeeded)
             return PaymentStatusResult.Failure(Text(a, "errorCode") ?? EmptyAnswerCode, Text(a, "errorMessage"));
 
@@ -231,6 +236,12 @@ public sealed class IyzicoPaymentProvider : IPaymentProvider
             Field(message, "token") ?? "", Field(message, "paymentConversationId") ?? "", Field(message, "status") ?? "");
         return IyzicoSignature.Matches(expected, signature);
     }
+
+    // A declined card answers status "failure" with the payment and its status, and without a signature. It is believed unsigned: we asked
+    // iyzico ourselves over HTTPS, and a failure gives nothing away (a paid result still needs its signature). An error without a payment
+    // status (a bad token, wrong keys) stays an error.
+    private static bool IsDeclined(JsonElement answer) =>
+        Text(answer, "status") != Succeeded && Text(answer, "paymentStatus") == PaymentFailed && Text(answer, "paymentId") is not null;
 
     private static NotificationVerification Refused(string? errorCode) =>
         new(false, null, null, null, null, null, null, errorCode, null, null, null, null);
