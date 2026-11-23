@@ -47,9 +47,12 @@ public class IyzicoSignatureTests
     }
 
     [Fact]
-    public void TheTestEnvironment_GoesOnlyToTheSandbox()
+    public void TheDefaults_AreTheDocumentedAddresses_TheSandboxForTests()
     {
-        Assert.Equal("https://sandbox-api.iyzipay.com/", IyzicoEndpoints.BaseAddressFor(PaymentEnvironment.Test).ToString());
-        Assert.Equal("https://api.iyzipay.com/", IyzicoEndpoints.BaseAddressFor(PaymentEnvironment.Live).ToString());
+        var options = new IyzicoOptions();
+
+        Assert.Equal("https://sandbox-api.iyzipay.com/", options.BaseAddressFor(PaymentEnvironment.Test).ToString());
+        Assert.Equal("https://api.iyzipay.com/", options.BaseAddressFor(PaymentEnvironment.Live).ToString());
+        Assert.Equal("/payment/iyzipos/checkoutform/initialize/auth/ecom", options.CheckoutFormInitializePath);
     }
 }

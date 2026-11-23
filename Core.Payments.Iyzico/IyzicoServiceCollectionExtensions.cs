@@ -7,10 +7,14 @@ public static class IyzicoServiceCollectionExtensions
 {
     /// <summary>
     /// Registers iyzico as an <see cref="IPaymentProvider"/> behind a logged HTTP client (every call is written to the payment log, masked).
-    /// Needs an <see cref="IPaymentLogWriter"/>. The address follows each merchant account's environment (sandbox or live).
+    /// Needs an <see cref="IPaymentLogWriter"/>. <paramref name="configure"/> overrides the documented addresses and paths
+    /// (<see cref="IyzicoOptions"/>). The address follows each merchant account's environment (sandbox or live).
     /// </summary>
-    public static IServiceCollection AddIyzicoPayments(this IServiceCollection services)
+    public static IServiceCollection AddIyzicoPayments(this IServiceCollection services, Action<IyzicoOptions>? configure = null)
     {
+        var options = new IyzicoOptions();
+        configure?.Invoke(options);
+        services.AddSingleton(options);
         services.AddHttpClient<IyzicoPaymentProvider>().AddPaymentLogging();
         services.AddTransient<IPaymentProvider>(sp => sp.GetRequiredService<IyzicoPaymentProvider>());
         return services;

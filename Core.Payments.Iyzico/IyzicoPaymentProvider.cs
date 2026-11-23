@@ -18,6 +18,7 @@ public sealed class IyzicoPaymentProvider : IPaymentProvider
     public const string PaymentIdRequiredCode = "payment_id_required";
     public const string SignatureMismatchCode = "signature_mismatch";
     public const string EmptyAnswerCode = "empty_answer";
+    private const string InvalidAddressMessage = "The merchant account's provider address is refused (HTTPS only; never the live API on a test account).";
 
     private const int IdentityNumberLength = 11;
     private const string Locale = "tr";
@@ -30,8 +31,13 @@ public sealed class IyzicoPaymentProvider : IPaymentProvider
     private static readonly JsonSerializerOptions Json = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     private readonly HttpClient _client;
+    private readonly IyzicoOptions _options;
 
-    public IyzicoPaymentProvider(HttpClient client) => _client = client;
+    public IyzicoPaymentProvider(HttpClient client, IyzicoOptions options)
+    {
+        _client = client;
+        _options = options;
+    }
 
     public PaymentProviderName Name => PaymentProviderName.Iyzico;
 
@@ -83,7 +89,9 @@ public sealed class IyzicoPaymentProvider : IPaymentProvider
             }),
         };
 
-        using JsonDocument answer = await PostAsync(IyzicoEndpoints.CheckoutFormInitialize, body, credentials, cancellationToken);
+        using JsonDocument? answer = await PostAsync(_options.CheckoutFormInitializePath, body, credentials, cancellationToken);
+        if (answer is null)
+            return PaymentStartResult.Failure(ProviderBaseAddress.InvalidCode, InvalidAddressMessage);
         JsonElement a = answer.RootElement;
         return Text(a, "status") == Succeeded
             ? new PaymentStartResult(true, Text(a, "token"), Text(a, "paymentPageUrl"), null, null, null)
@@ -102,7 +110,9 @@ public sealed class IyzicoPaymentProvider : IPaymentProvider
             return Refused(null);
 
         var body = new JsonObject { ["locale"] = Locale, ["token"] = token };
-        using JsonDocument answer = await PostAsync(IyzicoEndpoints.CheckoutFormResult, body, credentials, cancellationToken);
+        using JsonDocument? answer = await PostAsync(_options.CheckoutFormResultPath, body, credentials, cancellationToken);
+        if (answer is null)
+            return Refused(ProviderBaseAddress.InvalidCode);
         JsonElement a = answer.RootElement;
         if (Text(a, "status") != Succeeded)
             return Refused(Text(a, "errorCode") ?? EmptyAnswerCode);
@@ -135,7 +145,9 @@ public sealed class IyzicoPaymentProvider : IPaymentProvider
         else
             body["paymentConversationId"] = reference.OrderNo;
 
-        using JsonDocument answer = await PostAsync(IyzicoEndpoints.PaymentDetail, body, credentials, cancellationToken);
+        using JsonDocument? answer = await PostAsync(_options.PaymentDetailPath, body, credentials, cancellationToken);
+        if (answer is null)
+            return PaymentStatusResult.Failure(ProviderBaseAddress.InvalidCode, InvalidAddressMessage);
         JsonElement a = answer.RootElement;
         if (Text(a, "status") != Succeeded)
             return PaymentStatusResult.Failure(Text(a, "errorCode") ?? EmptyAnswerCode, Text(a, "errorMessage"));
@@ -162,8 +174,10 @@ public sealed class IyzicoPaymentProvider : IPaymentProvider
         if (reference.ProviderPaymentId is null)
             return PaymentActionResult.Failure(PaymentIdRequiredCode, "A cancel needs iyzico's payment id.");
         var body = new JsonObject { ["locale"] = Locale, ["conversationId"] = reference.OrderNo, ["paymentId"] = reference.ProviderPaymentId };
-        using JsonDocument answer = await PostAsync(IyzicoEndpoints.Cancel, body, credentials, cancellationToken);
-        return Action(answer.RootElement, reference.ProviderPaymentId);
+        using JsonDocument? answer = await PostAsync(_options.CancelPath, body, credentials, cancellationToken);
+        return answer is null
+            ? PaymentActionResult.Failure(ProviderBaseAddress.InvalidCode, InvalidAddressMessage)
+            : Action(answer.RootElement, reference.ProviderPaymentId);
     }
 
     // By item transaction (iyzico's recommendation for baskets); by payment when the transaction id is unknown.
@@ -178,20 +192,22 @@ public sealed class IyzicoPaymentProvider : IPaymentProvider
         if (reference.ProviderTransactionId is not null)
         {
             body["paymentTransactionId"] = reference.ProviderTransactionId;
-            path = IyzicoEndpoints.RefundByTransaction;
+            path = _options.RefundByTransactionPath;
         }
         else if (reference.ProviderPaymentId is not null)
         {
             body["paymentId"] = reference.ProviderPaymentId;
-            path = IyzicoEndpoints.RefundByPayment;
+            path = _options.RefundByPaymentPath;
         }
         else
         {
             return PaymentActionResult.Failure(PaymentIdRequiredCode, "A refund needs iyzico's payment or transaction id.");
         }
 
-        using JsonDocument answer = await PostAsync(path, body, credentials, cancellationToken);
-        return Action(answer.RootElement, reference.ProviderTransactionId ?? reference.ProviderPaymentId);
+        using JsonDocument? answer = await PostAsync(path, body, credentials, cancellationToken);
+        return answer is null
+            ? PaymentActionResult.Failure(ProviderBaseAddress.InvalidCode, InvalidAddressMessage)
+            : Action(answer.RootElement, reference.ProviderTransactionId ?? reference.ProviderPaymentId);
     }
 
     private static string[] MissingBuyerFields(PaymentBuyer buyer) =>
@@ -224,11 +240,14 @@ public sealed class IyzicoPaymentProvider : IPaymentProvider
             ? new PaymentActionResult(true, Text(answer, "refundHostReference") ?? Text(answer, "paymentTransactionId") ?? reference, null, null)
             : PaymentActionResult.Failure(Text(answer, "errorCode") ?? EmptyAnswerCode, Text(answer, "errorMessage"));
 
-    private async Task<JsonDocument> PostAsync(string path, JsonObject payload, MerchantCredentials credentials, CancellationToken cancellationToken)
+    // Null when the account's own address is refused (not HTTPS, or the live API on a test account): nothing is sent.
+    private async Task<JsonDocument?> PostAsync(string path, JsonObject payload, MerchantCredentials credentials, CancellationToken cancellationToken)
     {
+        if (!ProviderBaseAddress.TryResolve(credentials, _options.BaseAddressFor(credentials.Environment), _options.LiveBaseAddress, out Uri? baseAddress))
+            return null;
         string body = payload.ToJsonString(Json);
         string randomKey = IyzicoAuthorization.NewRandomKey();
-        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(IyzicoEndpoints.BaseAddressFor(credentials.Environment), path))
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(baseAddress!, path))
         {
             Content = new StringContent(body, Encoding.UTF8, "application/json"),
         };

@@ -25,9 +25,16 @@ public sealed class PayTrPaymentProvider : IPaymentProvider
     private const string No = "0";
     private const string AnyInstallment = "0";
 
-    private readonly HttpClient _client;
+    private const string InvalidAddressMessage = "The store's provider address is refused (HTTPS only).";
 
-    public PayTrPaymentProvider(HttpClient client) => _client = client;
+    private readonly HttpClient _client;
+    private readonly PayTrOptions _options;
+
+    public PayTrPaymentProvider(HttpClient client, PayTrOptions options)
+    {
+        _client = client;
+        _options = options;
+    }
 
     public PaymentProviderName Name => PaymentProviderName.PayTr;
 
@@ -72,10 +79,12 @@ public sealed class PayTrPaymentProvider : IPaymentProvider
             ["lang"] = Language,
         };
 
-        using JsonDocument answer = await PostAsync(PayTrEndpoints.GetToken, form, cancellationToken);
+        using JsonDocument? answer = await PostAsync(_options.GetTokenPath, form, credentials, cancellationToken);
+        if (answer is null)
+            return PaymentStartResult.Failure(ProviderBaseAddress.InvalidCode, InvalidAddressMessage);
         JsonElement a = answer.RootElement;
         return Text(a, "status") == Succeeded && Text(a, "token") is string token
-            ? new PaymentStartResult(true, token, PayTrEndpoints.PaymentPage(token), null, null, null)
+            ? new PaymentStartResult(true, token, _options.PaymentPage(token), null, null, null)
             : PaymentStartResult.Failure(StartRefusedCode, Text(a, "reason"));
     }
 
@@ -116,7 +125,9 @@ public sealed class PayTrPaymentProvider : IPaymentProvider
             ["merchant_oid"] = reference.OrderNo,
             ["paytr_token"] = PayTrToken.ForStatusQuery(credentials.MerchantId, credentials.ApiKey, credentials.SecretKey, reference.OrderNo),
         };
-        using JsonDocument answer = await PostAsync(PayTrEndpoints.StatusQuery, form, cancellationToken);
+        using JsonDocument? answer = await PostAsync(_options.StatusQueryPath, form, credentials, cancellationToken);
+        if (answer is null)
+            return PaymentStatusResult.Failure(ProviderBaseAddress.InvalidCode, InvalidAddressMessage);
         JsonElement a = answer.RootElement;
         if (Text(a, "status") != Succeeded)
         {
@@ -152,7 +163,9 @@ public sealed class PayTrPaymentProvider : IPaymentProvider
             ["return_amount"] = returnAmount,
             ["paytr_token"] = PayTrToken.ForRefund(credentials.MerchantId, credentials.ApiKey, credentials.SecretKey, orderNo, returnAmount),
         };
-        using JsonDocument answer = await PostAsync(PayTrEndpoints.Refund, form, cancellationToken);
+        using JsonDocument? answer = await PostAsync(_options.RefundPath, form, credentials, cancellationToken);
+        if (answer is null)
+            return PaymentActionResult.Failure(ProviderBaseAddress.InvalidCode, InvalidAddressMessage);
         JsonElement a = answer.RootElement;
         return Text(a, "status") == Succeeded
             ? new PaymentActionResult(true, Text(a, "reference_no") ?? orderNo, null, null)
@@ -175,9 +188,13 @@ public sealed class PayTrPaymentProvider : IPaymentProvider
     private static decimal? Decimal(string? text) =>
         decimal.TryParse(text?.Replace(',', '.'), NumberStyles.Number, CultureInfo.InvariantCulture, out decimal value) ? value : null;
 
-    private async Task<JsonDocument> PostAsync(string path, Dictionary<string, string> form, CancellationToken cancellationToken)
+    // Null when the store's own address is refused (not HTTPS): nothing is sent. Test and live share PayTR's address.
+    private async Task<JsonDocument?> PostAsync(string path, Dictionary<string, string> form, MerchantCredentials credentials,
+        CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(PayTrEndpoints.BaseAddress, path)) { Content = new FormUrlEncodedContent(form) };
+        if (!ProviderBaseAddress.TryResolve(credentials, _options.BaseAddress, null, out Uri? baseAddress))
+            return null;
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(baseAddress!, path)) { Content = new FormUrlEncodedContent(form) };
         using HttpResponseMessage response = await _client.SendAsync(request, cancellationToken);
         string text = await response.Content.ReadAsStringAsync(cancellationToken);
         return string.IsNullOrWhiteSpace(text) ? JsonDocument.Parse("{}") : JsonDocument.Parse(text);

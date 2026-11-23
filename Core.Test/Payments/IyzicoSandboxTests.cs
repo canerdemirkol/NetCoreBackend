@@ -13,7 +13,7 @@ public class IyzicoSandboxTests
     private static MerchantCredentials Sandbox() => new("sandbox", Environment.GetEnvironmentVariable(IyzicoSandboxFactAttribute.ApiKeyVariable)!,
         Environment.GetEnvironmentVariable(IyzicoSandboxFactAttribute.SecretKeyVariable)!, PaymentEnvironment.Test);
 
-    private static IyzicoPaymentProvider Provider() => new(new HttpClient { Timeout = TimeSpan.FromSeconds(30) });
+    private static IyzicoPaymentProvider Provider() => new(new HttpClient { Timeout = TimeSpan.FromSeconds(30) }, new IyzicoOptions());
 
     private static string NewOrderNo() => "PO" + DateTime.UtcNow.ToString("yyyyMMdd") + Guid.NewGuid().ToString("N")[..6].ToUpperInvariant();
 

@@ -12,6 +12,10 @@ store's test mode.
 - The notification URL is set in the PayTR store panel (Destek & Kurulum › Ayarlar › Bildirim URL), not per request.
 - PayTR's order number (`merchant_oid`) is letters and digits only, at most 64 characters.
 
+**Addresses are configuration, not code.** `PayTrOptions` holds the documented address, paths and payment page as defaults; the
+application overrides them (`AddPayTrPayments(o => …)`), and a store may carry its own base address in
+`MerchantCredentials.Extra[ProviderBaseAddress.Key]` (HTTPS only). A change at PayTR needs no new package.
+
 ```csharp
-services.AddPayTrPayments(); // needs an IPaymentLogWriter; every call is written to the payment log
+services.AddPayTrPayments(o => configuration.GetSection("Payments:PayTr").Bind(o)); // needs an IPaymentLogWriter
 ```

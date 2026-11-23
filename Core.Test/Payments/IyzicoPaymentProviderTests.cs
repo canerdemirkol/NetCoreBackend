@@ -22,12 +22,14 @@ public class IyzicoPaymentProviderTests
     private static PaymentStartRequest Start(PaymentBuyer? buyer = null) => new(OrderNo, Amount, buyer ?? Buyer(),
         "https://api.test/api/payments/callback/iyzico", "https://api.test/api/payments/return/iyzico", "Pro, aylık");
 
-    private static (IyzicoPaymentProvider Provider, RecordingHttpHandler Http) Provider(params string[] answers)
+    private static (IyzicoPaymentProvider Provider, RecordingHttpHandler Http) Provider(params string[] answers) => Provider(new IyzicoOptions(), answers);
+
+    private static (IyzicoPaymentProvider Provider, RecordingHttpHandler Http) Provider(IyzicoOptions options, params string[] answers)
     {
         var http = new RecordingHttpHandler();
         foreach (string answer in answers)
             http.Answer(answer);
-        return (new IyzicoPaymentProvider(new HttpClient(http)), http);
+        return (new IyzicoPaymentProvider(new HttpClient(http), options), http);
     }
 
     private static JsonElement Json(string body) => JsonDocument.Parse(body).RootElement;
@@ -219,6 +221,33 @@ public class IyzicoPaymentProviderTests
             Json(http.Requests[0].Body).GetProperty("paymentTransactionId").GetString(), Json(http.Requests[0].Body).GetProperty("price").GetString()));
         Assert.Equal(("/v2/payment/refund", "12345678"), (http.Requests[1].Uri.AbsolutePath, Json(http.Requests[1].Body).GetProperty("paymentId").GetString()));
         Assert.True(byTransaction.Succeeded && byPayment.Succeeded);
+    }
+
+    // The application's configuration wins: a changed address or path needs no new package.
+    [Fact]
+    public async Task TheConfiguredPaths_AndTheAccountsOwnAddress_AreUsed_AndSigned()
+    {
+        var options = new IyzicoOptions { CheckoutFormInitializePath = "/v3/checkoutform/initialize" };
+        (IyzicoPaymentProvider provider, RecordingHttpHandler http) = Provider(options, InitializeSucceeded);
+        MerchantCredentials account = Sandbox with { Extra = new Dictionary<string, string> { [ProviderBaseAddress.Key] = "https://sandbox-v2.iyzipay.test" } };
+
+        await provider.StartAsync(Start(), account, CancellationToken.None);
+
+        var call = http.Requests.Single();
+        Assert.Equal("https://sandbox-v2.iyzipay.test/v3/checkoutform/initialize", call.Uri.ToString());
+        Assert.Equal(IyzicoAuthorization.Header(ApiKey, SecretKey, call.Headers["x-iyzi-rnd"], "/v3/checkoutform/initialize", call.Body), call.Headers["Authorization"]);
+    }
+
+    [Fact]
+    public async Task ATestAccountPointedAtTheLiveApi_IsRefused_WithoutACall()
+    {
+        (IyzicoPaymentProvider provider, RecordingHttpHandler http) = Provider();
+        MerchantCredentials account = Sandbox with { Extra = new Dictionary<string, string> { [ProviderBaseAddress.Key] = "https://api.iyzipay.com" } };
+
+        PaymentStartResult started = await provider.StartAsync(Start(), account, CancellationToken.None);
+
+        Assert.Equal(ProviderBaseAddress.InvalidCode, started.ErrorCode);
+        Assert.Empty(http.Requests);
     }
 
     [Fact]

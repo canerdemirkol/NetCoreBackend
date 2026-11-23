@@ -6,7 +6,7 @@
     <RootNamespace>NetCoreBackend.NArchitecture.$(AssemblyName)</RootNamespace>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <PackageId>NetCoreBackend.NArchitecture.$(AssemblyName)</PackageId>
-    <Version>1.0.0-preview.1</Version>
+    <Version>1.0.0-preview.2</Version>
     <Title>NetCoreBackend NArchitecture $(AssemblyName)</Title>
     <Description>PayTR (iFrame API) for Core.Payments: hosted payment page, HMAC-signed notifications, status query and refund. Preview until verified in test mode.</Description>
     <Product>NetCoreBackend NArchitecture</Product>

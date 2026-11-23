@@ -22,12 +22,14 @@ public class PayTrPaymentProviderTests
     private static PaymentStartRequest Start(PaymentBuyer? buyer = null) => new(OrderNo, Amount, buyer ?? Buyer(),
         "https://api.test/api/payments/callback/paytr", "https://app.test/payment/result", "Pro, aylık");
 
-    private static (PayTrPaymentProvider Provider, RecordingHttpHandler Http) Provider(params string[] answers)
+    private static (PayTrPaymentProvider Provider, RecordingHttpHandler Http) Provider(params string[] answers) => Provider(new PayTrOptions(), answers);
+
+    private static (PayTrPaymentProvider Provider, RecordingHttpHandler Http) Provider(PayTrOptions options, params string[] answers)
     {
         var http = new RecordingHttpHandler();
         foreach (string answer in answers)
             http.Answer(answer);
-        return (new PayTrPaymentProvider(new HttpClient(http)), http);
+        return (new PayTrPaymentProvider(new HttpClient(http), options), http);
     }
 
     private static System.Collections.Specialized.NameValueCollection Form(string body) => HttpUtility.ParseQueryString(body);
@@ -169,6 +171,33 @@ public class PayTrPaymentProviderTests
             CancellationToken.None);
 
         Assert.Equal(("006", "Toplam iade tutari odeme tutarindan fazla olamaz"), (refused.ErrorCode, refused.ErrorMessage));
+    }
+
+    // The application's configuration wins: a changed address, path or page needs no new package.
+    [Fact]
+    public async Task TheConfiguredPaths_ThePage_AndTheAccountsOwnAddress_AreUsed()
+    {
+        var options = new PayTrOptions { GetTokenPath = "/odeme/api/v2/get-token", PaymentPagePrefix = "https://pay.paytr.test/guvenli/" };
+        (PayTrPaymentProvider provider, RecordingHttpHandler http) = Provider(options, """{"status":"success","token":"abc123"}""");
+        MerchantCredentials store = TestStore with { Extra = new Dictionary<string, string> { [ProviderBaseAddress.Key] = "https://api2.paytr.test" } };
+
+        PaymentStartResult started = await provider.StartAsync(Start(), store, CancellationToken.None);
+
+        Assert.Equal("https://api2.paytr.test/odeme/api/v2/get-token", http.Requests.Single().Uri.ToString());
+        Assert.Equal("https://pay.paytr.test/guvenli/abc123", started.PaymentPageUrl);
+    }
+
+    [Fact]
+    public async Task AnInsecureAccountAddress_IsRefused_WithoutACall()
+    {
+        (PayTrPaymentProvider provider, RecordingHttpHandler http) = Provider();
+        MerchantCredentials store = TestStore with { Extra = new Dictionary<string, string> { [ProviderBaseAddress.Key] = "http://www.paytr.com" } };
+
+        PaymentActionResult refund = await provider.RefundAsync(new RefundRequest(new PaymentReference(OrderNo, null, null), Money.Of(1m)), store,
+            CancellationToken.None);
+
+        Assert.Equal(ProviderBaseAddress.InvalidCode, refund.ErrorCode);
+        Assert.Empty(http.Requests);
     }
 
     [Fact]
