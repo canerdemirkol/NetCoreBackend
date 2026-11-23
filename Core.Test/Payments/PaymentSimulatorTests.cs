@@ -239,6 +239,33 @@ public sealed class PaymentSimulatorTests : IDisposable
         Assert.Equal("unauthorized", refused.ErrorCode);
     }
 
+    // The simulator lives in memory; a restarted API gets a new bank. Its ids must not repeat the earlier ones, since the application keeps
+    // a provider payment id unique per merchant account.
+    [Fact]
+    public async Task AfterARestart_ThePaymentAndTransactionIds_DoNotRepeat()
+    {
+        MerchantCredentials merchant = Merchant();
+        (_, string token) = await StartAsync(merchant);
+        IReadOnlyDictionary<string, string> before = (await _control.SubmitCardAsync(token, Card("0000"), CancellationToken.None)).ReturnFields;
+
+        var services = new ServiceCollection();
+        services.AddSingleton<IPaymentLogWriter>(new RecordingWriter());
+        services.AddPaymentSimulator(new Environment(Environments.Development), o => o.PageBaseUrl = PageBase);
+        services.AddSingleton<ISimulatorNotificationSender>(new RecordingSender());
+        using ServiceProvider restarted = services.BuildServiceProvider();
+        IPaymentProvider provider = restarted.GetRequiredService<IEnumerable<IPaymentProvider>>().Single(p => p.Name == PaymentProviderName.Simulator);
+        PaymentStartResult started = await provider.StartAsync(new PaymentStartRequest($"ORD-{Guid.NewGuid():N}"[..16], Hundred,
+            new PaymentBuyer("U-1", "Ayşe Yılmaz", "ayse@test.local", null, null, null, "10.0.0.1"),
+            "https://app.test/api/payments/callback/simulator", "https://app.test/api/payments/return/simulator", "Pro, aylık"), merchant, CancellationToken.None);
+        IReadOnlyDictionary<string, string> after = (await restarted.GetRequiredService<ISimulatorControl>()
+            .SubmitCardAsync(started.ProviderToken!, Card("0000"), CancellationToken.None)).ReturnFields;
+
+        Assert.StartsWith("SIM-P-", before["payment_id"]);
+        Assert.StartsWith("SIM-T-", before["transaction_id"]);
+        Assert.NotEqual(before["payment_id"], after["payment_id"]);
+        Assert.NotEqual(before["transaction_id"], after["transaction_id"]);
+    }
+
     [Fact]
     public void InProduction_TheSimulatorCannotBeRegistered()
     {

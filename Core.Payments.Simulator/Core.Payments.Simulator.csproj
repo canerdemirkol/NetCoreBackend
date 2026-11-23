@@ -6,7 +6,7 @@
     <RootNamespace>NetCoreBackend.NArchitecture.$(AssemblyName)</RootNamespace>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <PackageId>NetCoreBackend.NArchitecture.$(AssemblyName)</PackageId>
-    <Version>1.0.0-preview.2</Version>
+    <Version>1.0.0-preview.3</Version>
     <Title>NetCoreBackend NArchitecture $(AssemblyName)</Title>
     <Description>A payment provider simulator for development and tests: a hosted-form flow and a server-notification flow with real signatures, magic card numbers for each outcome and a control surface. Never for production.</Description>
     <Product>NetCoreBackend NArchitecture</Product>

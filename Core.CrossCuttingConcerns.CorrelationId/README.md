@@ -37,4 +37,17 @@ public class CreateOrderCommandHandler : IRequestHandler<CreateOrderCommand>
 }
 ```
 
+## Background work (1.1.0)
+
+A scheduled job's run has no HTTP request to carry an id. `BackgroundCorrelation.Begin(job)` opens one (`job-{job}-{guid}`) for the run;
+the WebApi package's accessor returns it when there is no request, so everything written in that run carries the same id. It flows with the
+async context: parallel runs never share one, and a nested run restores the outer id when disposed.
+
+```csharp
+using (BackgroundCorrelation.Begin("payments"))
+{
+    await ReconcileAsync(cancellationToken); // logs and audit rows written here carry the run's id
+}
+```
+
 > For DI registration and middleware, use the `Core.CrossCuttingConcerns.CorrelationId.WebApi` package.

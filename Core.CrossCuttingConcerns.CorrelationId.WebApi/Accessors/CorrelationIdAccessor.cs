@@ -4,7 +4,10 @@ using NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.CorrelationId.WebAp
 
 namespace NetCoreBackend.NArchitecture.Core.CrossCuttingConcerns.CorrelationId.WebApi.Accessors;
 
-/// <summary>Reads the correlation ID stored in HttpContext.Items by <see cref="CorrelationIdMiddleware"/>.</summary>
+/// <summary>
+/// Reads the correlation ID stored in HttpContext.Items by <see cref="CorrelationIdMiddleware"/>; outside a request (background work), the
+/// run's <see cref="BackgroundCorrelation"/>.
+/// </summary>
 public class CorrelationIdAccessor : ICorrelationIdAccessor
 {
     private readonly IHttpContextAccessor _httpContextAccessor;
@@ -15,5 +18,5 @@ public class CorrelationIdAccessor : ICorrelationIdAccessor
     }
 
     public string? CorrelationId =>
-        _httpContextAccessor.HttpContext?.Items[CorrelationIdMiddleware.HttpItemsKey] as string;
+        _httpContextAccessor.HttpContext?.Items[CorrelationIdMiddleware.HttpItemsKey] as string ?? BackgroundCorrelation.Current;
 }

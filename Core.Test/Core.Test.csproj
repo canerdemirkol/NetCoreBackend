@@ -50,5 +50,6 @@
     <ProjectReference Include="..\Core.Payments\Core.Payments.csproj" />
     <ProjectReference Include="..\Core.Payments.Simulator\Core.Payments.Simulator.csproj" />
     <ProjectReference Include="..\Core.CrossCuttingConcerns.Exception.WebAPI\Core.CrossCuttingConcerns.Exception.WebApi.csproj" />
+    <ProjectReference Include="..\Core.CrossCuttingConcerns.CorrelationId.WebApi\Core.CrossCuttingConcerns.CorrelationId.WebApi.csproj" />
   </ItemGroup>
 </Project>

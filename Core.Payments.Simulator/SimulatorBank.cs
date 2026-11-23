@@ -52,6 +52,10 @@ public sealed class SimulatorBank
     private readonly Dictionary<string, string> _secrets = [];
     private readonly Dictionary<string, SimulatedPayment> _byToken = [];
     private readonly Dictionary<string, SimulatedPayment> _byOrder = [];
+    private const int RunIdLength = 8;
+    // The books are lost when the process ends and the sequence starts again; the run id keeps ids unique across restarts, since an
+    // application keeps a provider's payment id unique per merchant account.
+    private readonly string _runId = Guid.NewGuid().ToString("N")[..RunIdLength];
     private int _sequence;
 
     internal void EnsureMerchant(string merchantId, string secret)
@@ -80,7 +84,7 @@ public sealed class SimulatorBank
     internal string NextId(string prefix)
     {
         lock (_lock)
-            return $"{prefix}-{++_sequence:D6}";
+            return $"{prefix}-{_runId}-{++_sequence:D6}";
     }
 
     public SimulatedPayment? ByToken(string token)
