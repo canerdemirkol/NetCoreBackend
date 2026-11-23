@@ -1,46 +1,4 @@
-using System.Globalization;
-using System.Security.Cryptography;
-using System.Text;
-
 namespace NetCoreBackend.NArchitecture.Core.Payments.Simulator;
-
-public enum SimulatorFlow
-{
-    // Like iyzico: a hosted payment page; the browser posts a signed result back.
-    HostedForm,
-    // Like PayTR: an embedded page; the provider posts a signed notification to the server and expects "OK".
-    ServerNotification,
-}
-
-public sealed class SimulatorOptions
-{
-    /// <summary>The credentials' extra that picks the flow (<see cref="SimulatorFlow"/> name; HostedForm when absent).</summary>
-    public const string FlowKey = "flow";
-
-    /// <summary>Where the application serves the simulator's payment page; the page of a payment is <c>{PageBaseUrl}/{token}</c>.</summary>
-    public string PageBaseUrl { get; set; } = "";
-}
-
-/// <summary>One payment as the simulated provider holds it.</summary>
-public sealed class SimulatedPayment
-{
-    public required string Token { get; init; }
-    public required string OrderNo { get; init; }
-    public required string MerchantId { get; init; }
-    public required Money Amount { get; init; }
-    public required string CallbackUrl { get; init; }
-    public required string ReturnUrl { get; init; }
-    public required SimulatorFlow Flow { get; init; }
-    public required string Description { get; init; }
-    public ProviderPaymentState State { get; internal set; } = ProviderPaymentState.Pending;
-    public string? PaymentId { get; internal set; }
-    public string? TransactionId { get; internal set; }
-    public string? CardLast4 { get; internal set; }
-    public Money Refunded { get; internal set; }
-    public bool DayClosed { get; internal set; }
-    // A notification held back (card ending 0005) until the control sends it.
-    internal IReadOnlyDictionary<string, string>? HeldNotification { get; set; }
-}
 
 /// <summary>
 /// The simulated provider's books, in memory (development and tests run one instance). A merchant's secret is the one it first used (trust
@@ -108,23 +66,4 @@ public sealed class SimulatorBank
     internal object Lock => _lock;
 
     private static string Key(string merchantId, string orderNo) => $"{merchantId}\n{orderNo}";
-}
-
-/// <summary>The simulator's message signature: HMAC-SHA256 with the merchant's secret over the fixed fields, base64.</summary>
-public static class SimulatorSignature
-{
-    public const string HashField = "hash";
-    private static readonly string[] SignedFields =
-        ["merchant_id", "order_no", "status", "total_amount", "currency", "payment_id", "transaction_id", "failed_reason_code"];
-
-    public static string Compute(string secret, IReadOnlyDictionary<string, string> fields) =>
-        Hmac(secret, string.Join("|", SignedFields.Select(f => fields.GetValueOrDefault(f) ?? "")));
-
-    public static string Hmac(string secret, string text) =>
-        Convert.ToBase64String(HMACSHA256.HashData(Encoding.UTF8.GetBytes(secret), Encoding.UTF8.GetBytes(text)));
-
-    public static bool Matches(string expected, string? actual) =>
-        actual is not null && CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(expected), Encoding.UTF8.GetBytes(actual));
-
-    internal static string Minor(Money amount) => amount.Minor.ToString(CultureInfo.InvariantCulture);
 }

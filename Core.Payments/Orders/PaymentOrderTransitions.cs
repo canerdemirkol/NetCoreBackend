@@ -1,41 +1,5 @@
 namespace NetCoreBackend.NArchitecture.Core.Payments.Orders;
 
-public enum PaymentOrderStatus
-{
-    Pending,
-    Paid,
-    Failed,
-    Abandoned,
-    Cancelled,
-    PartiallyRefunded,
-    Refunded,
-    // A paid notification that did not match the order, or a second payment for the same period: a person decides.
-    Review,
-    Disputed,
-}
-
-public enum PaymentMismatch
-{
-    Amount,
-    Currency,
-    OrderNo,
-    Merchant,
-}
-
-public enum TransitionOutcome
-{
-    Applied,
-    // Already handled (a repeated notification) or nothing to change.
-    NoEffect,
-    // The message cannot be trusted (bad signature).
-    Rejected,
-}
-
-/// <summary>What the order should look like: its number, the amount the server computed and the merchant account it was started with.</summary>
-public sealed record PaymentExpectation(string OrderNo, Money Amount, string MerchantId);
-
-public sealed record TransitionDecision(TransitionOutcome Outcome, PaymentOrderStatus? Target, IReadOnlyList<PaymentMismatch> Mismatches, string Reason);
-
 /// <summary>
 /// The order status rules, pure. <see cref="CanTransition"/> is the one table every change goes through; <see cref="Decide"/> turns a
 /// verified notification into a change. A paid notification is believed only when amount, currency, order number and merchant all match the

@@ -5,27 +5,6 @@ using System.Text.Unicode;
 
 namespace NetCoreBackend.NArchitecture.Core.Payments.Simulator;
 
-/// <summary>What the browser does after a card was submitted: post <see cref="ReturnFields"/> to <see cref="ReturnUrl"/> (the page posts itself).</summary>
-public sealed record SimulatorSubmitResult(string ReturnUrl, IReadOnlyDictionary<string, string> ReturnFields, string AutoPostHtml);
-
-/// <summary>Sends a notification to the application's callback address and returns its answer (the real one posts a form over HTTP).</summary>
-public interface ISimulatorNotificationSender
-{
-    Task<string> SendAsync(string url, IReadOnlyDictionary<string, string> fields, CancellationToken cancellationToken);
-}
-
-/// <summary>
-/// The simulator's handle for the payment page, the card form and tests: submit a card (its last four digits pick the outcome), send a
-/// held notification (once, twice or tampered), close the day (cancel before, refund after).
-/// </summary>
-public interface ISimulatorControl
-{
-    string RenderPaymentPage(string token);
-    Task<SimulatorSubmitResult> SubmitCardAsync(string token, string cardNumber, CancellationToken cancellationToken);
-    Task SendNotificationAsync(string orderNo, int times, bool tamper, CancellationToken cancellationToken);
-    void CloseDay();
-}
-
 /// <summary>
 /// The card endings: 0000 paid, 0002 declined, 0003 3D failed, 0004 paid but the notification says another amount, 0005 notification
 /// held back, 0006 notification sent twice, 0007 tampered signature; any other ending fails ("unknown_test_card").
@@ -154,23 +133,5 @@ public sealed class SimulatorControl : ISimulatorControl
             html.Append($"<input type=\"hidden\" name=\"{Html.Encode(name)}\" value=\"{Html.Encode(value)}\">");
         html.Append("<noscript><button type=\"submit\">Devam</button></noscript></form></body></html>");
         return new SimulatorSubmitResult(returnUrl, fields, html.ToString());
-    }
-}
-
-/// <summary>Posts the notification as a form, like the real provider, and returns the application's answer.</summary>
-public sealed class HttpSimulatorNotificationSender : ISimulatorNotificationSender
-{
-    public const string ClientName = "PaymentSimulatorNotifier";
-    private readonly IHttpClientFactory _clients;
-
-    public HttpSimulatorNotificationSender(IHttpClientFactory clients)
-    {
-        _clients = clients;
-    }
-
-    public async Task<string> SendAsync(string url, IReadOnlyDictionary<string, string> fields, CancellationToken cancellationToken)
-    {
-        using HttpResponseMessage response = await _clients.CreateClient(ClientName).PostAsync(url, new FormUrlEncodedContent(fields), cancellationToken);
-        return await response.Content.ReadAsStringAsync(cancellationToken);
     }
 }

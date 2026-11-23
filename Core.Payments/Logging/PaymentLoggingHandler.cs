@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using Microsoft.Extensions.DependencyInjection;
 using NetCoreBackend.NArchitecture.Core.Payments.Masking;
 
 namespace NetCoreBackend.NArchitecture.Core.Payments.Logging;
@@ -115,16 +114,5 @@ public sealed class PaymentLoggingHandler : DelegatingHandler
         }
         value = null;
         return false;
-    }
-}
-
-public static class PaymentLoggingHttpClientBuilderExtensions
-{
-    /// <summary>Logs every call of this provider client (<see cref="PaymentLoggingHandler"/>); needs an <see cref="IPaymentLogWriter"/>.</summary>
-    public static IHttpClientBuilder AddPaymentLogging(this IHttpClientBuilder builder)
-    {
-        builder.Services.AddTransient<PaymentLoggingHandler>(sp =>
-            new PaymentLoggingHandler(sp.GetRequiredService<IPaymentLogWriter>(), sp.GetService<TimeProvider>()));
-        return builder.AddHttpMessageHandler<PaymentLoggingHandler>();
     }
 }

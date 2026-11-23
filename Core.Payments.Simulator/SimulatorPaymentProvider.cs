@@ -32,7 +32,7 @@ public sealed class SimulatorPaymentProvider : IPaymentProvider
         // The first secret a merchant uses is the one the simulated provider knows (trust on first use).
         _bank.EnsureMerchant(credentials.MerchantId, credentials.SecretKey);
         GatewayAnswer answer = await CallAsync("api/start", new GatewayStart(request.OrderNo, request.Amount.Minor, request.Amount.Currency,
-            request.CallbackUrl, request.ReturnUrl, FlowOf(credentials).ToString(), request.Description, request.Buyer.Name, request.Buyer.Email),
+            request.CallbackUrl, request.ReturnUrl, FlowOf(credentials).ToString(), request.Description, request.Buyer.FullName, request.Buyer.Email),
             credentials, cancellationToken);
         return answer.Succeeded
             ? new PaymentStartResult(true, answer.Token, $"{_options.PageBaseUrl.TrimEnd('/')}/{answer.Token}", null, null, null)
@@ -42,7 +42,9 @@ public sealed class SimulatorPaymentProvider : IPaymentProvider
     public PaymentMessageReference ReferenceOf(IncomingPaymentMessage message) =>
         new(message.Fields.TryGetValue("order_no", out string? orderNo) && orderNo.Length > 0 ? orderNo : null, null);
 
-    public NotificationVerification VerifyNotification(IncomingPaymentMessage message, MerchantCredentials credentials)
+    // The simulator's messages are signed themselves: no network call.
+    public Task<NotificationVerification> VerifyNotificationAsync(IncomingPaymentMessage message, MerchantCredentials credentials,
+        CancellationToken cancellationToken)
     {
         IReadOnlyDictionary<string, string> f = message.Fields;
         bool valid = SimulatorSignature.Matches(SimulatorSignature.Compute(credentials.SecretKey, f), f.GetValueOrDefault(SimulatorSignature.HashField));
@@ -56,9 +58,9 @@ public sealed class SimulatorPaymentProvider : IPaymentProvider
             "failed" => PaymentResultKind.Failed,
             _ => null,
         };
-        return new NotificationVerification(valid, Field("order_no"), Field("merchant_id"), result, amount, Field("payment_id"), Field("transaction_id"),
-            Field("failed_reason_code"), Field("card_last4"), Field("card_family"),
-            int.TryParse(Field("installment_count"), CultureInfo.InvariantCulture, out int installment) ? installment : null, "OK");
+        return Task.FromResult(new NotificationVerification(valid, Field("order_no"), Field("merchant_id"), result, amount, Field("payment_id"),
+            Field("transaction_id"), Field("failed_reason_code"), Field("card_last4"), Field("card_family"),
+            int.TryParse(Field("installment_count"), CultureInfo.InvariantCulture, out int installment) ? installment : null, "OK"));
     }
 
     public async Task<PaymentStatusResult> QueryAsync(PaymentReference reference, MerchantCredentials credentials, CancellationToken cancellationToken)

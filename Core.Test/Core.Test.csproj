@@ -49,6 +49,8 @@
     <ProjectReference Include="..\Core.EntityChanges\Core.EntityChanges.csproj" />
     <ProjectReference Include="..\Core.Payments\Core.Payments.csproj" />
     <ProjectReference Include="..\Core.Payments.Simulator\Core.Payments.Simulator.csproj" />
+    <ProjectReference Include="..\Core.Payments.Iyzico\Core.Payments.Iyzico.csproj" />
+    <ProjectReference Include="..\Core.Payments.PayTr\Core.Payments.PayTr.csproj" />
     <ProjectReference Include="..\Core.CrossCuttingConcerns.Exception.WebAPI\Core.CrossCuttingConcerns.Exception.WebApi.csproj" />
     <ProjectReference Include="..\Core.CrossCuttingConcerns.CorrelationId.WebApi\Core.CrossCuttingConcerns.CorrelationId.WebApi.csproj" />
   </ItemGroup>

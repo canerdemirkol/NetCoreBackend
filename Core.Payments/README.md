@@ -2,8 +2,12 @@
 
 Provider-independent payment building blocks for a virtual POS integration. **Preview** until each provider is verified in its sandbox.
 
-- `IPaymentProvider`: start a payment (hosted page or token), verify a notification or return (signature; no network), query the status,
+- `IPaymentProvider`: start a payment (hosted page or token), verify a notification or return (`VerifyNotificationAsync`: a signed message is
+  checked without a network call; a token-only return such as iyzico's is retrieved and its signed answer checked), query the status,
   cancel, refund (full or partial). Stateless: credentials come with every call; base addresses are fixed in the provider package.
+- `PaymentBuyer`: first and last name, e-mail, phone, billing address, city, country, postal code, identity number and IP; a provider that
+  needs a field left empty refuses the start with an error result. Providers: `Core.Payments.Iyzico`, `Core.Payments.PayTr`, and
+  `Core.Payments.Simulator` for development and tests.
 - `Money` (minor units, one currency) and `VatSplit` (VAT-inclusive and VAT-exclusive prices; net + VAT = total, rounded away from zero).
 - `PaymentOrderTransitions`: the order status table and the decision for an incoming notification (paid, failed, review on any mismatch of
   amount, currency, order number or merchant, no effect when repeated, rejected when the signature is bad).

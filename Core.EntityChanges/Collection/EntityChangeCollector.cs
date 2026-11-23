@@ -8,16 +8,6 @@ using NetCoreBackend.NArchitecture.Core.EntityChanges.Values;
 namespace NetCoreBackend.NArchitecture.Core.EntityChanges.Collection;
 
 /// <summary>
-/// One collected change, before the consumer adds its actor and turns it into an <see cref="EntityChange"/> row.
-/// </summary>
-public sealed record CollectedEntityChange(
-    Guid? TenantId,
-    EntityChangeType ChangeType,
-    string EntityType,
-    string EntityId,
-    IReadOnlyList<PropertyChange> Properties);
-
-/// <summary>
 /// Reads only the configured properties of configured records. Values are compared, not the modified flags: Update()
 /// flags every property, and a save that changes nothing allow-listed leaves no change. A soft delete (DeletedDate
 /// set) and a removal are deletions, recorded with the last values.

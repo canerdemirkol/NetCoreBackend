@@ -6,9 +6,6 @@ using NetCoreBackend.NArchitecture.Core.EntityChanges.Collection;
 
 namespace NetCoreBackend.NArchitecture.Core.EntityChanges.Model;
 
-/// <summary>A configured entity as the model holds it: stored name, CLR type and its allow-listed properties.</summary>
-public sealed record EntityChangeTypeInfo(string Name, Type ClrType, IReadOnlyList<EntityChangeProperty> Properties);
-
 /// <summary>
 /// The change log's model, built once (keep it in a static field) from the consumer's configuration classes. Building
 /// refuses a configuration that could record the wrong scope or record, or an ambiguous property, so a mistake stops
@@ -110,11 +107,3 @@ public sealed class EntityChangeModel
             e => scope((TEntity)e), e => id((TEntity)e), e => follow((TEntity)e), e => maskAll((TEntity)e));
     }
 }
-
-/// <summary>A configured entity with its delegates over the untyped tracked instance.</summary>
-internal sealed record TrackedType(
-    EntityChangeTypeInfo Info,
-    Func<object, Guid?> TenantOf,
-    Func<object, string> IdOf,
-    Func<object, bool> IsFollowed,
-    Func<object, bool> IsMaskedAll);

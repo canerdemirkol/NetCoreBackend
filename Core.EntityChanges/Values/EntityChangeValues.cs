@@ -6,9 +6,6 @@ using System.Text.Unicode;
 
 namespace NetCoreBackend.NArchitecture.Core.EntityChanges.Values;
 
-/// <summary>One property of a change row. A masked one (a secret) carries no value, only the fact that it changed.</summary>
-public sealed record PropertyChange(string Property, string? OldValue, string? NewValue, bool Masked = false);
-
 /// <summary>
 /// Change log values as language-neutral text (the screen formats them), each cut at 512 characters, and the JSON a
 /// row stores them in: <c>[{"p","o","n"}]</c>, a secret as <c>{"p","m":true}</c>. The JSON shape is a contract with

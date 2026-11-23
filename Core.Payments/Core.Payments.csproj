@@ -6,7 +6,7 @@
     <RootNamespace>NetCoreBackend.NArchitecture.$(AssemblyName)</RootNamespace>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <PackageId>NetCoreBackend.NArchitecture.$(AssemblyName)</PackageId>
-    <Version>1.0.0-preview.3</Version>
+    <Version>1.0.0-preview.4</Version>
     <Title>NetCoreBackend NArchitecture $(AssemblyName)</Title>
     <Description>Payment provider contract, money and VAT, order status rules, masking, the payment transaction log model and an HTTP handler that logs every provider call. Preview until the providers are verified in their sandboxes.</Description>
     <Product>NetCoreBackend NArchitecture</Product>

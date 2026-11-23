@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>NetCoreBackend.NArchitecture.$(AssemblyName)</RootNamespace>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <PackageId>NetCoreBackend.NArchitecture.$(AssemblyName)</PackageId>
+    <Version>1.0.0-preview.1</Version>
+    <Title>NetCoreBackend NArchitecture $(AssemblyName)</Title>
+    <Description>PayTR (iFrame API) for Core.Payments: hosted payment page, HMAC-signed notifications, status query and refund. Preview until verified in test mode.</Description>
+    <Product>NetCoreBackend NArchitecture</Product>
+    <Authors>Caner Demirkol, Contributors</Authors>
+    <Company></Company>
+    <PackageTags>Payments, PayTR, Virtual POS, NArchitecture</PackageTags>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Core.Payments\Core.Payments.csproj" />
+  </ItemGroup>
+</Project>

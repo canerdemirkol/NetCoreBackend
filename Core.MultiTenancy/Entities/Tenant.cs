@@ -32,11 +32,3 @@ public class Tenant : Entity<Guid>
         DefaultLocale = defaultLocale;
     }
 }
-
-public enum TenantPlanType
-{
-    Free,
-    Basic,
-    Pro,
-    Enterprise
-}

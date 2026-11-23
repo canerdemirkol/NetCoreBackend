@@ -72,7 +72,7 @@ public sealed class PaymentSimulatorTests : IDisposable
     {
         string orderNo = $"ORD-{Guid.NewGuid():N}"[..16];
         PaymentStartResult started = await _provider.StartAsync(new PaymentStartRequest(orderNo, Hundred,
-            new PaymentBuyer("U-1", "Ayşe Yılmaz", "ayse@test.local", null, null, null, "10.0.0.1"),
+            Buyer,
             "https://app.test/api/payments/callback/simulator", "https://app.test/api/payments/return/simulator", "Pro, aylık"), merchant, CancellationToken.None);
         Assert.True(started.Succeeded, started.ErrorMessage);
         return (orderNo, started.ProviderToken!);
@@ -80,11 +80,15 @@ public sealed class PaymentSimulatorTests : IDisposable
 
     private static string Card(string last4) => "400000000000" + last4;
 
+    // The payer as an application builds them from its billing details; the simulator shows the full name on its page.
+    private static readonly PaymentBuyer Buyer = new("U-1", "Ayşe", "Yılmaz", "ayse@test.local", "+905551112233", "Atatürk Cd. 1", "İstanbul", "Turkey",
+        "34000", null, "10.0.0.1");
+
     [Fact]
     public async Task Start_GivesThePaymentPageAddress_LikeARealProvider()
     {
         PaymentStartResult started = await _provider.StartAsync(new PaymentStartRequest("ORD-PAGE-1", Hundred,
-            new PaymentBuyer("U-1", "Ayşe Yılmaz", "ayse@test.local", null, null, null, "10.0.0.1"),
+            Buyer,
             "https://app.test/api/payments/callback/simulator", "https://app.test/api/payments/return/simulator", "Pro, aylık"), Merchant(), CancellationToken.None);
 
         Assert.Equal($"{PageBase}/{started.ProviderToken}", started.PaymentPageUrl);
@@ -109,7 +113,7 @@ public sealed class PaymentSimulatorTests : IDisposable
         (string orderNo, string token) = await StartAsync(merchant);
 
         SimulatorSubmitResult submitted = await _control.SubmitCardAsync(token, Card("0000"), CancellationToken.None);
-        NotificationVerification verified = _provider.VerifyNotification(new IncomingPaymentMessage(submitted.ReturnFields, new Dictionary<string, string>()), merchant);
+        NotificationVerification verified = await _provider.VerifyNotificationAsync(new IncomingPaymentMessage(submitted.ReturnFields, new Dictionary<string, string>()), merchant, CancellationToken.None);
 
         Assert.Contains(token, _control.RenderPaymentPage(token));
         Assert.Equal("https://app.test/api/payments/return/simulator", submitted.ReturnUrl);
@@ -131,7 +135,7 @@ public sealed class PaymentSimulatorTests : IDisposable
         await _control.SubmitCardAsync(token, Card("0000"), CancellationToken.None);
 
         var (url, fields) = Assert.Single(_sender.Sent);
-        NotificationVerification verified = _provider.VerifyNotification(new IncomingPaymentMessage(fields, new Dictionary<string, string>()), merchant);
+        NotificationVerification verified = await _provider.VerifyNotificationAsync(new IncomingPaymentMessage(fields, new Dictionary<string, string>()), merchant, CancellationToken.None);
         Assert.Equal("https://app.test/api/payments/callback/simulator", url);
         Assert.True(verified.SignatureValid);
         Assert.Equal(orderNo, verified.OrderNo);
@@ -149,7 +153,7 @@ public sealed class PaymentSimulatorTests : IDisposable
 
         await _control.SubmitCardAsync(token, Card(last4), CancellationToken.None);
 
-        NotificationVerification verified = _provider.VerifyNotification(new IncomingPaymentMessage(_sender.Sent.Single().Fields, new Dictionary<string, string>()), merchant);
+        NotificationVerification verified = await _provider.VerifyNotificationAsync(new IncomingPaymentMessage(_sender.Sent.Single().Fields, new Dictionary<string, string>()), merchant, CancellationToken.None);
         Assert.True(verified.SignatureValid);
         Assert.Equal(result, verified.Result);
         Assert.Equal(error, verified.ErrorCode);
@@ -173,7 +177,7 @@ public sealed class PaymentSimulatorTests : IDisposable
         await _control.SubmitCardAsync(tamperedToken, Card("0007"), CancellationToken.None);
 
         Assert.Equal((0, 1, 3), (afterDelayed, afterRelease, afterDouble));
-        Assert.False(_provider.VerifyNotification(new IncomingPaymentMessage(_sender.Sent[^1].Fields, new Dictionary<string, string>()), merchant).SignatureValid);
+        Assert.False((await _provider.VerifyNotificationAsync(new IncomingPaymentMessage(_sender.Sent[^1].Fields, new Dictionary<string, string>()), merchant, CancellationToken.None)).SignatureValid);
     }
 
     [Fact]
@@ -255,7 +259,7 @@ public sealed class PaymentSimulatorTests : IDisposable
         using ServiceProvider restarted = services.BuildServiceProvider();
         IPaymentProvider provider = restarted.GetRequiredService<IEnumerable<IPaymentProvider>>().Single(p => p.Name == PaymentProviderName.Simulator);
         PaymentStartResult started = await provider.StartAsync(new PaymentStartRequest($"ORD-{Guid.NewGuid():N}"[..16], Hundred,
-            new PaymentBuyer("U-1", "Ayşe Yılmaz", "ayse@test.local", null, null, null, "10.0.0.1"),
+            Buyer,
             "https://app.test/api/payments/callback/simulator", "https://app.test/api/payments/return/simulator", "Pro, aylık"), merchant, CancellationToken.None);
         IReadOnlyDictionary<string, string> after = (await restarted.GetRequiredService<ISimulatorControl>()
             .SubmitCardAsync(started.ProviderToken!, Card("0000"), CancellationToken.None)).ReturnFields;

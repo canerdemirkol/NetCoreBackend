@@ -67,6 +67,10 @@
 | [`Core.Translation.AmazonTranslate.DependencyInjection`](Core.Translation.AmazonTranslate.DependencyInjection/README.md) | DI registration |
 | [`Core.Outbox`](Core.Outbox/README.md) | Transactional outbox — `OutboxMessage` entity, `IOutboxStore`/`IOutboxPublisher`, `EfOutboxStore<TDbContext>` |
 | [`Core.Outbox.DependencyInjection`](Core.Outbox.DependencyInjection/README.md) | `AddOutbox<TDbContext>()` — store + `OutboxPublisherWorker` BackgroundService |
+| [`Core.Payments`](Core.Payments/README.md) | Provider-independent virtual POS contract (`IPaymentProvider`), `Money`/`VatSplit`, order transitions, masking, payment log (preview) |
+| [`Core.Payments.Iyzico`](Core.Payments.Iyzico/README.md) | iyzico Checkout Form over the IYZWSv2 API (preview) |
+| [`Core.Payments.PayTr`](Core.Payments.PayTr/README.md) | PayTR iFrame API (preview) |
+| [`Core.Payments.Simulator`](Core.Payments.Simulator/README.md) | A payment provider simulator for development and tests; refused in Production (preview) |
 | [`Core.Test`](Core.Test/README.md) | Test helpers (`BaseFakeData`, `MockRepositoryHelper`, `BaseMockRepository`) + framework regression suite (`dotnet test`). Test SDK refs `PrivateAssets="all"` — consumers only get the helpers. |
 
 ---
@@ -147,6 +151,11 @@ app.MapControllers();
 ```
 
 ---
+
+## Code organization
+
+One top-level type per source file, named after it; namespaces follow folders. A generic family sharing one name (`IRequest` and
+`IRequest<TResponse>`) stays in one file. `Core.Test/CodeOrganizationTests` fails the build's tests when a file breaks this.
 
 ## Requirements
 
