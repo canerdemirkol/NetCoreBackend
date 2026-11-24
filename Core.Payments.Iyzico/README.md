@@ -14,6 +14,10 @@ iyzico for `Core.Payments`: the Checkout Form (iyzico's hosted payment page) ove
   calls `/payment/auth` without 3D (`paymentGroup: SUBSCRIPTION`) and believes a paid answer only with its signature
   (`paymentId:currency:basketId:conversationId:paidPrice:price`); a declined card (status `failure` with a `paymentId`, unsigned) is a
   failed payment. `DeleteStoredCardAsync` calls `DELETE /cardstorage/card`. Verified in the sandbox (2026-11-23).
+- Instalments: `Amount` is the basket `price`; what the customer paid above it (`paidPrice − price`, both signed) is `InstallmentFee`.
+  Who pays the fee is set in iyzico's panel (Taksit ve Komisyon Ayarları), not in the request.
+- `ITransactionReportProvider`: the daily report (`GET /v2/reporting/payment/transactions`, paged; IYZWSv2 over the path only):
+  payments with commission and expected payout, cancels and refunds. Verified in the sandbox (2026-11-24).
 - `QueryAsync` (`/payment/detail`), `CancelAsync` (same day, whole amount), `RefundAsync` (by item transaction; by payment when the
   transaction id is unknown).
 - Credentials: `MerchantId` = iyzico merchant id, `ApiKey`, `SecretKey`. `PaymentEnvironment.Test` calls the sandbox address, `Live` the live one.

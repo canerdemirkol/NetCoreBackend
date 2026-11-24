@@ -10,4 +10,5 @@ public enum PaymentCapabilities
     StatusQuery = 8,
     Installments = 16,
     Recurring = 32,
+    TransactionReport = 64,
 }

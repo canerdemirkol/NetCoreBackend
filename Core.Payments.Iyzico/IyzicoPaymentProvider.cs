@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -11,7 +12,7 @@ namespace NetCoreBackend.NArchitecture.Core.Payments.Iyzico;
 /// client's handlers (the payment log). Provider errors are results. A renewal charges the card iyzico stored at the first payment
 /// (/payment/auth, no 3D) and is believed only with its signature.
 /// </summary>
-public sealed class IyzicoPaymentProvider : IStoredCardPaymentProvider
+public sealed class IyzicoPaymentProvider : IStoredCardPaymentProvider, ITransactionReportProvider
 {
     /// <summary>iyzico requires an identity number; a company (10-digit tax number) or an unknown one is sent as this.</summary>
     public const string PlaceholderIdentityNumber = "11111111111";
@@ -29,6 +30,9 @@ public sealed class IyzicoPaymentProvider : IStoredCardPaymentProvider
     private const string SubscriptionGroup = "SUBSCRIPTION";
     private const string WebChannel = "WEB";
     private const int SingleInstallment = 1;
+    private const int PaidTransaction = 2;
+    private const string ReportDateFormat = "yyyy-MM-dd";
+    private const string ReportTimeFormat = "yyyy-MM-dd HH:mm:ss";
     private const string Succeeded = "success";
     private const string PaymentSucceeded = "SUCCESS";
     private const string PaymentFailed = "FAILURE";
@@ -48,7 +52,7 @@ public sealed class IyzicoPaymentProvider : IStoredCardPaymentProvider
 
     public PaymentCapabilities Capabilities =>
         PaymentCapabilities.Cancel | PaymentCapabilities.Refund | PaymentCapabilities.PartialRefund | PaymentCapabilities.StatusQuery
-        | PaymentCapabilities.Recurring;
+        | PaymentCapabilities.Recurring | PaymentCapabilities.TransactionReport;
 
     public async Task<PaymentStartResult> StartAsync(PaymentStartRequest request, MerchantCredentials credentials, CancellationToken cancellationToken)
     {
@@ -123,12 +127,13 @@ public sealed class IyzicoPaymentProvider : IStoredCardPaymentProvider
             PaymentFailed => PaymentResultKind.Failed,
             _ => null,
         };
-        Money? amount = paidPrice is decimal paid ? Money.Of(paid, Text(a, "currency") ?? Money.DefaultCurrency) : null;
-        return new NotificationVerification(true, Text(a, "basketId") ?? Text(a, "conversationId"), credentials.MerchantId, result, amount,
-            Text(a, "paymentId"), FirstTransactionId(a), Text(a, "errorCode"), Text(a, "lastFourDigits"), Text(a, "cardFamily"), Integer(a, "installment"),
-            null)
+        string currency = Text(a, "currency") ?? Money.DefaultCurrency;
+        return new NotificationVerification(true, Text(a, "basketId") ?? Text(a, "conversationId"), credentials.MerchantId, result,
+            OrderAmountOf(listPrice, paidPrice, currency), Text(a, "paymentId"), FirstTransactionId(a), Text(a, "errorCode"), Text(a, "lastFourDigits"),
+            Text(a, "cardFamily"), Integer(a, "installment"), null)
         {
             StoredCard = StoredCardOf(a),
+            InstallmentFee = FeeOf(listPrice, paidPrice, currency),
         };
     }
 
@@ -175,8 +180,9 @@ public sealed class IyzicoPaymentProvider : IStoredCardPaymentProvider
 
         // A payment held for a fraud review is not paid yet; the status query settles it later.
         ProviderPaymentState state = Integer(a, "fraudStatus") is null or FraudApproved ? ProviderPaymentState.Paid : ProviderPaymentState.Pending;
-        Money? amount = paidPrice is decimal paid ? Money.Of(paid, Text(a, "currency") ?? Money.DefaultCurrency) : null;
-        return new PaymentStatusResult(true, state, amount, Text(a, "paymentId"), FirstTransactionId(a), null, null);
+        string currency = Text(a, "currency") ?? Money.DefaultCurrency;
+        return new PaymentStatusResult(true, state, OrderAmountOf(IyzicoPrice.Read(Get(a, "price")), paidPrice, currency), Text(a, "paymentId"),
+            FirstTransactionId(a), null, null);
     }
 
     public async Task<PaymentActionResult> DeleteStoredCardAsync(StoredCardReference card, MerchantCredentials credentials, CancellationToken cancellationToken)
@@ -206,8 +212,9 @@ public sealed class IyzicoPaymentProvider : IStoredCardPaymentProvider
             return PaymentStatusResult.Failure(Text(a, "errorCode") ?? EmptyAnswerCode, Text(a, "errorMessage"));
 
         decimal? paidPrice = IyzicoPrice.Read(Get(a, "paidPrice"));
+        decimal? listPrice = IyzicoPrice.Read(Get(a, "price"));
         string expected = IyzicoSignature.Compute(credentials.SecretKey, Text(a, "paymentId") ?? "", Text(a, "currency") ?? "", Text(a, "basketId") ?? "",
-            Text(a, "conversationId") ?? "", Price(paidPrice), Price(IyzicoPrice.Read(Get(a, "price"))));
+            Text(a, "conversationId") ?? "", Price(paidPrice), Price(listPrice));
         if (!IyzicoSignature.Matches(expected, Text(a, "signature")))
             return PaymentStatusResult.Failure(SignatureMismatchCode, "The answer's signature does not match.");
 
@@ -217,8 +224,12 @@ public sealed class IyzicoPaymentProvider : IStoredCardPaymentProvider
             PaymentFailed => ProviderPaymentState.Failed,
             _ => ProviderPaymentState.Pending,
         };
-        Money? amount = paidPrice is decimal paid ? Money.Of(paid, Text(a, "currency") ?? Money.DefaultCurrency) : null;
-        return new PaymentStatusResult(true, state, amount, Text(a, "paymentId"), FirstTransactionId(a), null, null);
+        string currency = Text(a, "currency") ?? Money.DefaultCurrency;
+        return new PaymentStatusResult(true, state, OrderAmountOf(listPrice, paidPrice, currency), Text(a, "paymentId"), FirstTransactionId(a), null, null)
+        {
+            InstallmentFee = FeeOf(listPrice, paidPrice, currency),
+            Installment = Integer(a, "installment"),
+        };
     }
 
     // A same-day void of the whole payment.
@@ -262,6 +273,60 @@ public sealed class IyzicoPaymentProvider : IStoredCardPaymentProvider
             ? PaymentActionResult.Failure(ProviderBaseAddress.InvalidCode, InvalidAddressMessage)
             : Action(answer.RootElement, reference.ProviderTransactionId ?? reference.ProviderPaymentId);
     }
+
+    // The documented daily report (docs.iyzico.com: Reporting, transactions): GET, page by page; IYZWSv2 over the path alone (the sandbox
+    // refuses a signature that includes the query string, 2026-11-24). A payment that did not go through (status other than 2) is left out.
+    public async Task<TransactionReportResult> GetTransactionsAsync(DateOnly day, MerchantCredentials credentials, CancellationToken cancellationToken)
+    {
+        var transactions = new List<ProviderTransaction>();
+        for (int page = 1; ; page++)
+        {
+            string query = string.Create(CultureInfo.InvariantCulture, $"?transactionDate={day.ToString(ReportDateFormat, CultureInfo.InvariantCulture)}&page={page}");
+            using JsonDocument? answer = await SendAsync(HttpMethod.Get, _options.TransactionReportPath, null, credentials, cancellationToken, query);
+            if (answer is null)
+                return TransactionReportResult.Failure(ProviderBaseAddress.InvalidCode, InvalidAddressMessage);
+            JsonElement a = answer.RootElement;
+            if (Text(a, "status") != Succeeded)
+                return TransactionReportResult.Failure(Text(a, "errorCode") ?? EmptyAnswerCode, Text(a, "errorMessage"));
+            if (Get(a, "transactions") is { ValueKind: JsonValueKind.Array } rows)
+                transactions.AddRange(rows.EnumerateArray().Select(ReportRowOf).OfType<ProviderTransaction>());
+            if (page >= (Integer(a, "totalPageCount") ?? page))
+                return TransactionReportResult.Of(transactions);
+        }
+    }
+
+    private static ProviderTransaction? ReportRowOf(JsonElement row)
+    {
+        ProviderTransactionKind? kind = Text(row, "transactionType") switch
+        {
+            "PAYMENT" => ProviderTransactionKind.Payment,
+            "CANCEL" => ProviderTransactionKind.Cancel,
+            "REFUND" => ProviderTransactionKind.Refund,
+            _ => null,
+        };
+        if (kind is null || (kind == ProviderTransactionKind.Payment && Integer(row, "transactionStatus") is int status && status != PaidTransaction)
+            || IyzicoPrice.Read(Get(row, "price")) is not decimal price)
+            return null;
+        string currency = Text(row, "transactionCurrency") ?? Money.DefaultCurrency;
+        decimal? rate = IyzicoPrice.Read(Get(row, "iyzicoCommission"));
+        decimal? fee = IyzicoPrice.Read(Get(row, "iyzicoFee"));
+        decimal? commission = rate is null && fee is null ? null : (rate ?? 0m) + (fee ?? 0m);
+        bool payment = kind == ProviderTransactionKind.Payment;
+        return new ProviderTransaction(kind.Value, Text(row, "basketId") ?? Text(row, "conversationId"), Text(row, "paymentId"), Text(row, "paymentTxId"),
+            Money.Of(price, currency), payment && IyzicoPrice.Read(Get(row, "paidPrice")) is decimal paid ? Money.Of(paid, currency) : null,
+            payment ? Integer(row, "installment") : null, payment && commission is decimal kept ? Money.Of(kept, currency) : null,
+            payment && IyzicoPrice.Read(Get(row, "merchantPayoutAmount")) is decimal payout ? Money.Of(payout, currency) : null,
+            DateTime.TryParseExact(Text(row, "transactionDate"), ReportTimeFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime at)
+                ? at
+                : null);
+    }
+
+    // E13-14b: the order's own amount (the basket price), and what the customer paid above it for instalments.
+    private static Money? OrderAmountOf(decimal? listPrice, decimal? paidPrice, string currency) =>
+        (listPrice ?? paidPrice) is decimal amount ? Money.Of(amount, currency) : null;
+
+    private static Money? FeeOf(decimal? listPrice, decimal? paidPrice, string currency) =>
+        listPrice is decimal list && paidPrice is decimal paid && paid > list ? Money.Of(paid - list, currency) : null;
 
     private static string[] MissingBuyerFields(PaymentBuyer buyer) =>
     [
@@ -335,17 +400,16 @@ public sealed class IyzicoPaymentProvider : IStoredCardPaymentProvider
     private Task<JsonDocument?> PostAsync(string path, JsonObject payload, MerchantCredentials credentials, CancellationToken cancellationToken) =>
         SendAsync(HttpMethod.Post, path, payload, credentials, cancellationToken);
 
-    private async Task<JsonDocument?> SendAsync(HttpMethod method, string path, JsonObject payload, MerchantCredentials credentials,
-        CancellationToken cancellationToken)
+    private async Task<JsonDocument?> SendAsync(HttpMethod method, string path, JsonObject? payload, MerchantCredentials credentials,
+        CancellationToken cancellationToken, string query = "")
     {
         if (!ProviderBaseAddress.TryResolve(credentials, _options.BaseAddressFor(credentials.Environment), _options.LiveBaseAddress, out Uri? baseAddress))
             return null;
-        string body = payload.ToJsonString(Json);
+        string body = payload?.ToJsonString(Json) ?? "";
         string randomKey = IyzicoAuthorization.NewRandomKey();
-        using var request = new HttpRequestMessage(method, new Uri(baseAddress!, path))
-        {
-            Content = new StringContent(body, Encoding.UTF8, "application/json"),
-        };
+        using var request = new HttpRequestMessage(method, new Uri(baseAddress!, path + query));
+        if (payload is not null)
+            request.Content = new StringContent(body, Encoding.UTF8, "application/json");
         request.Headers.Add(IyzicoAuthorization.RandomKeyHeader, randomKey);
         request.Headers.TryAddWithoutValidation("Authorization", IyzicoAuthorization.Header(credentials.ApiKey, credentials.SecretKey, randomKey, path, body));
         using HttpResponseMessage response = await _client.SendAsync(request, cancellationToken);

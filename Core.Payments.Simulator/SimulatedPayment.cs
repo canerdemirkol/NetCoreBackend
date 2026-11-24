@@ -14,6 +14,12 @@ public sealed class SimulatedPayment
     public bool StoreCard { get; init; }
     public string? OwnerKey { get; internal set; }
     public string? StoredCardToken { get; internal set; }
+    // E13-14b: instalments the start allowed, the ones taken and their fee; when it was paid, and its cancels and refunds.
+    public int MaxInstallment { get; init; } = 1;
+    public int Installment { get; internal set; } = 1;
+    public long FeeMinor { get; internal set; }
+    public DateTime? PaidAtUtc { get; internal set; }
+    internal List<SimulatedEvent> Events { get; } = [];
     public ProviderPaymentState State { get; internal set; } = ProviderPaymentState.Pending;
     public string? PaymentId { get; internal set; }
     public string? TransactionId { get; internal set; }

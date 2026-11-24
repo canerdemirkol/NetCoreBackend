@@ -305,6 +305,6 @@ public class IyzicoPaymentProviderTests
     public void TheCapabilities_AreCancelRefundsQueriesAndStoredCards()
     {
         Assert.Equal(PaymentCapabilities.Cancel | PaymentCapabilities.Refund | PaymentCapabilities.PartialRefund | PaymentCapabilities.StatusQuery
-            | PaymentCapabilities.Recurring, Provider().Provider.Capabilities);
+            | PaymentCapabilities.Recurring | PaymentCapabilities.TransactionReport, Provider().Provider.Capabilities);
     }
 }

@@ -17,6 +17,7 @@ public sealed class IyzicoOptions
     public string RefundByPaymentPath { get; set; } = "/v2/payment/refund";
     public string StoredCardChargePath { get; set; } = "/payment/auth";
     public string StoredCardPath { get; set; } = "/cardstorage/card";
+    public string TransactionReportPath { get; set; } = "/v2/reporting/payment/transactions";
 
     public Uri BaseAddressFor(PaymentEnvironment environment) => environment == PaymentEnvironment.Live ? LiveBaseAddress : SandboxBaseAddress;
 }

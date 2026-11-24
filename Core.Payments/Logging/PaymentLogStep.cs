@@ -25,4 +25,5 @@ public enum PaymentLogStep
     Error = 20,
     StoredCardCharge = 21,
     StoredCardDeleted = 22,
+    TransactionReport = 23,
 }

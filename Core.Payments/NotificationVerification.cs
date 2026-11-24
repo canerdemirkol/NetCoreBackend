@@ -20,4 +20,10 @@ public sealed record NotificationVerification(
 {
     /// <summary>The card the payment stored at the provider, when it stored one.</summary>
     public StoredCardDetails? StoredCard { get; init; }
+
+    /// <summary>
+    /// E13-14b: what the customer paid above <see cref="Amount"/> for instalments (the provider's or the bank's fee, set in the
+    /// provider's panel); null when nothing. <see cref="Amount"/> is always the order's own amount, which is compared with the order.
+    /// </summary>
+    public Money? InstallmentFee { get; init; }
 }

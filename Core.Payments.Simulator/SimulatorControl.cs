@@ -8,11 +8,16 @@ namespace NetCoreBackend.NArchitecture.Core.Payments.Simulator;
 /// <summary>
 /// The card endings: 0000 paid, 0002 declined, 0003 3D failed, 0004 paid but the notification says another amount, 0005 notification
 /// held back, 0006 notification sent twice, 0007 tampered signature, 0008 paid but declined when the stored card is charged again; any
-/// other ending fails ("unknown_test_card").
+/// other ending fails ("unknown_test_card"). E13-14b: 0009 pays in 3 instalments with a 10% fee when the start allows 3 or more (else
+/// in one).
 /// </summary>
 public sealed class SimulatorControl : ISimulatorControl
 {
     internal const string DeclinedOnRenewalEnding = "0008";
+    internal const string InstalmentEnding = "0009";
+    private const int Instalments = 3;
+    private const int FeePercent = 10;
+    private const int Percent = 100;
     private const int AmountDifferenceMinor = 100;
     private const string TamperedHash = "tampered";
     private static readonly HtmlEncoder Html = HtmlEncoder.Create(UnicodeRanges.All);
@@ -54,7 +59,7 @@ public sealed class SimulatorControl : ISimulatorControl
         string last4 = digits.Length >= 4 ? digits[^4..] : digits;
         (bool paid, string? error) = last4 switch
         {
-            "0000" or "0004" or "0005" or "0006" or "0007" or DeclinedOnRenewalEnding => (true, (string?)null),
+            "0000" or "0004" or "0005" or "0006" or "0007" or DeclinedOnRenewalEnding or InstalmentEnding => (true, (string?)null),
             "0002" => (false, "card_declined"),
             "0003" => (false, "3ds_failed"),
             _ => (false, "unknown_test_card"),
@@ -70,6 +75,12 @@ public sealed class SimulatorControl : ISimulatorControl
             {
                 payment.PaymentId = _bank.NextId("SIM-P");
                 payment.TransactionId = _bank.NextId("SIM-T");
+                payment.PaidAtUtc = DateTime.UtcNow;
+                if (last4 == InstalmentEnding && payment.MaxInstallment >= Instalments)
+                {
+                    payment.Installment = Instalments;
+                    payment.FeeMinor = payment.Amount.Minor * FeePercent / Percent;
+                }
                 if (payment.StoreCard)
                 {
                     payment.OwnerKey ??= _bank.NextId("SIM-U");
@@ -125,9 +136,11 @@ public sealed class SimulatorControl : ISimulatorControl
             ["failed_reason_code"] = error ?? "",
             ["card_last4"] = payment.CardLast4 ?? "",
             ["card_family"] = "Visa",
-            ["installment_count"] = "1",
             ["flow"] = payment.Flow.ToString(),
         };
+        fields["installment_count"] = payment.Installment.ToString(CultureInfo.InvariantCulture);
+        if (payment.FeeMinor > 0)
+            fields["installment_fee"] = payment.FeeMinor.ToString(CultureInfo.InvariantCulture);
         if (payment.StoredCardToken is not null)
         {
             fields["card_user_key"] = payment.OwnerKey!;

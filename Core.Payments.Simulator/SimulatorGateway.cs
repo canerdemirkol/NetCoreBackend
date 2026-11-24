@@ -14,6 +14,9 @@ public sealed class SimulatorGateway : HttpMessageHandler
     public const string MerchantHeader = "X-Sim-Merchant";
     public const string KeyHeader = "X-Sim-Key";
     public const string SignatureHeader = "X-Sim-Signature";
+    private const int CommissionPercent = 3;
+    private const int Percent = 100;
+    private const int TurkeyOffsetHours = 3;
     internal static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     private readonly SimulatorBank _bank;
@@ -39,6 +42,7 @@ public sealed class SimulatorGateway : HttpMessageHandler
             "/api/refund" => Refund(merchantId, JsonSerializer.Deserialize<GatewayReference>(body, Json)!),
             "/api/charge" => Charge(merchantId, JsonSerializer.Deserialize<GatewayCharge>(body, Json)!),
             "/api/card/delete" => DeleteCard(merchantId, JsonSerializer.Deserialize<GatewayCard>(body, Json)!),
+            "/api/report" => Report(merchantId, JsonSerializer.Deserialize<GatewayReportRequest>(body, Json)!),
             _ => new GatewayAnswer(false, "not_found"),
         };
         return Answer(answer.ErrorCode == "not_found" ? HttpStatusCode.NotFound : HttpStatusCode.OK, answer);
@@ -60,6 +64,7 @@ public sealed class SimulatorGateway : HttpMessageHandler
             Description = start.Description,
             StoreCard = start.StoreCard,
             OwnerKey = start.CardUserKey,
+            MaxInstallment = start.MaxInstallment,
         });
         return new GatewayAnswer(true, Token: payment.Token);
     }
@@ -67,7 +72,7 @@ public sealed class SimulatorGateway : HttpMessageHandler
     private GatewayAnswer Query(string merchantId, GatewayReference reference) =>
         _bank.ByOrder(merchantId, reference.OrderNo) is SimulatedPayment p
             ? new GatewayAnswer(true, State: p.State.ToString(), AmountMinor: p.Amount.Minor, Currency: p.Amount.Currency, PaymentId: p.PaymentId,
-                TransactionId: p.TransactionId)
+                TransactionId: p.TransactionId, FeeMinor: p.FeeMinor, Installment: p.Installment)
             : new GatewayAnswer(false, "order_not_found");
 
     private GatewayAnswer Cancel(string merchantId, GatewayReference reference)
@@ -81,6 +86,7 @@ public sealed class SimulatorGateway : HttpMessageHandler
             if (p.DayClosed)
                 return new GatewayAnswer(false, "day_closed_use_refund", "The day is closed; refund instead.");
             p.State = ProviderPaymentState.Cancelled;
+            p.Events.Add(new SimulatedEvent(ProviderTransactionKind.Cancel, p.Amount.Minor, DateTime.UtcNow));
             return new GatewayAnswer(true, Reference: _bank.NextId("SIM-C"));
         }
     }
@@ -99,6 +105,7 @@ public sealed class SimulatorGateway : HttpMessageHandler
             if ((p.Refunded.Currency is null ? amount : p.Refunded + amount) > p.Amount)
                 return new GatewayAnswer(false, "exceeds_paid_amount", "Refunds would exceed the payment.");
             p.Refunded = p.Refunded.Currency is null ? amount : p.Refunded + amount;
+            p.Events.Add(new SimulatedEvent(ProviderTransactionKind.Refund, amount.Minor, DateTime.UtcNow));
             p.State = p.Refunded.Minor == p.Amount.Minor ? ProviderPaymentState.Refunded : ProviderPaymentState.PartiallyRefunded;
             return new GatewayAnswer(true, Reference: _bank.NextId("SIM-R"));
         }
@@ -129,10 +136,34 @@ public sealed class SimulatorGateway : HttpMessageHandler
             payment.State = error is null ? ProviderPaymentState.Paid : ProviderPaymentState.Failed;
             payment.PaymentId = _bank.NextId("SIM-P");
             payment.TransactionId = error is null ? _bank.NextId("SIM-T") : null;
+            payment.PaidAtUtc = error is null ? DateTime.UtcNow : null;
         }
         return new GatewayAnswer(true, error, State: payment.State.ToString(), AmountMinor: charge.AmountMinor, Currency: charge.Currency,
             PaymentId: payment.PaymentId, TransactionId: payment.TransactionId);
     }
+
+    // E13-14b: the day's payments, cancels and refunds, the day in Turkey time like the real providers; a 3% commission is kept.
+    private GatewayAnswer Report(string merchantId, GatewayReportRequest request)
+    {
+        var rows = new List<GatewayTransaction>();
+        lock (_bank.Lock)
+        {
+            foreach (SimulatedPayment p in _bank.All().Where(p => p.MerchantId == merchantId))
+            {
+                if (p.PaidAtUtc is DateTime paidAt && DayOf(paidAt) == request.Day)
+                {
+                    long commission = p.Amount.Minor * CommissionPercent / Percent;
+                    rows.Add(new GatewayTransaction(nameof(ProviderTransactionKind.Payment), p.OrderNo, p.Amount.Minor, p.Amount.Minor + p.FeeMinor,
+                        p.Installment, commission, p.Amount.Minor - commission, p.Amount.Currency, paidAt));
+                }
+                rows.AddRange(p.Events.Where(e => DayOf(e.AtUtc) == request.Day).Select(e => new GatewayTransaction(e.Kind.ToString(), p.OrderNo,
+                    e.AmountMinor, null, null, null, null, p.Amount.Currency, e.AtUtc)));
+            }
+        }
+        return new GatewayAnswer(true, Transactions: rows);
+    }
+
+    private static DateOnly DayOf(DateTime utc) => DateOnly.FromDateTime(utc.AddHours(TurkeyOffsetHours));
 
     private GatewayAnswer DeleteCard(string merchantId, GatewayCard card) =>
         _bank.RemoveCard(merchantId, card.CardUserKey, card.CardToken)

@@ -30,6 +30,10 @@ package (never taken from a request).
    period's end the application charges it with `ChargeStoredCardAsync` (no page, no 3D, answered at once: Paid or Failed is the
    provider's verdict, a failed call is unknown and is asked again with `QueryAsync`) and deletes it with `DeleteStoredCardAsync` when the
    customer turns renewal off. Log steps 21 and 22.
+6. **Instalments and the daily report (E13-14b).** `NotificationVerification.Amount` and `PaymentStatusResult.Amount` are the order's own
+   amount; what the customer paid above it for instalments is `InstallmentFee` (the fee's payer is the provider's panel setting). A
+   provider with `PaymentCapabilities.TransactionReport` implements `ITransactionReportProvider`: a day's payments, cancels and refunds
+   with commission and expected payout, for the application to reconcile. Log step 23.
 
 ## Periods and upgrades
 

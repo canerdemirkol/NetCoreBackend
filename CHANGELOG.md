@@ -7,6 +7,29 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [2026-11-24] (2)
+
+### Core.Payments 1.0.0-preview.8, Iyzico preview.5, PayTr preview.3, Simulator preview.7 — instalments and the daily transaction report
+
+#### Changed
+
+- **iyzico (breaking for callers that relied on it):** `NotificationVerification.Amount` and `PaymentStatusResult.Amount` are now the
+  basket `price`, not `paidPrice`. An instalment payment with a fee the customer paid would have looked like an amount mismatch.
+
+#### Added
+
+- `NotificationVerification.InstallmentFee`; `PaymentStatusResult.InstallmentFee` and `Installment` (init-only). iyzico: `paidPrice − price`
+  (both signed); PayTR: `total_amount − payment_amount` (notification) and `payment_total`, `taksit` (status query); simulator: card ending
+  `0009` (3 instalments, 10% fee, signed `installment_fee`).
+- `ITransactionReportProvider`, `ProviderTransaction`, `ProviderTransactionKind`, `TransactionReportResult`,
+  `PaymentCapabilities.TransactionReport`, `PaymentLogStep.TransactionReport` (23). iyzico: `GET /v2/reporting/payment/transactions`
+  (paged, IYZWSv2 over the path only, failed payments left out); PayTR: "İşlem Dökümü" (`/rapor/islem-dokumu`, from the docs); simulator:
+  the day's payments, cancels and refunds. `IyzicoOptions.TransactionReportPath`, `PayTrOptions.TransactionReportPath`.
+- The simulator's message signature also covers `installment_fee`.
+- Tests: iyzico 7, PayTR 4, simulator 2, sandbox 1 (the report read from the sandbox).
+
+---
+
 ## [2026-11-24]
 
 ### Core.Payments 1.0.0-preview.7 — a dispute won after a partial refund

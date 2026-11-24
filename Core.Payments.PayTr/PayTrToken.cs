@@ -23,6 +23,10 @@ public static class PayTrToken
     public static string ForRefund(string merchantId, string merchantKey, string merchantSalt, string merchantOid, string returnAmount) =>
         Hmac(merchantKey, merchantId + merchantOid + returnAmount + merchantSalt);
 
+    // E13-14b: "İşlem Dökümü" (dev.paytr.com/islem-dokumu).
+    public static string ForTransactionReport(string merchantId, string merchantKey, string merchantSalt, string startDate, string endDate) =>
+        Hmac(merchantKey, merchantId + startDate + endDate + merchantSalt);
+
     /// <summary>Compares in constant time; a missing hash never matches.</summary>
     public static bool Matches(string expected, string? given) =>
         given is not null && CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(expected), Encoding.ASCII.GetBytes(given));

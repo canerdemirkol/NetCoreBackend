@@ -8,7 +8,7 @@ namespace NetCoreBackend.NArchitecture.Core.Payments.PayTr;
 /// arrives as a notification signed with the merchant key and salt, answered "OK". Calls are form posts through the client's handlers (the
 /// payment log). PayTR has no cancel: money goes back by refund. Provider errors are results.
 /// </summary>
-public sealed class PayTrPaymentProvider : IPaymentProvider
+public sealed class PayTrPaymentProvider : IPaymentProvider, ITransactionReportProvider
 {
     public const string BuyerIncompleteCode = "buyer_incomplete";
     public const string NotSupportedCode = "not_supported";
@@ -24,6 +24,13 @@ public sealed class PayTrPaymentProvider : IPaymentProvider
     private const string Yes = "1";
     private const string No = "0";
     private const string AnyInstallment = "0";
+    private const string NoTransactions = "failed";
+    private const string Sale = "S";
+    private const string Return = "I";
+    private const string ReportDay = "yyyy-MM-dd";
+    private const string DayStarts = " 00:00:00";
+    private const string DayEnds = " 23:59:59";
+    private const string ReportDayFormat = "dd.MM.yyyy";
 
     private const string InvalidAddressMessage = "The store's provider address is refused (HTTPS only).";
 
@@ -38,7 +45,8 @@ public sealed class PayTrPaymentProvider : IPaymentProvider
 
     public PaymentProviderName Name => PaymentProviderName.PayTr;
 
-    public PaymentCapabilities Capabilities => PaymentCapabilities.Refund | PaymentCapabilities.PartialRefund | PaymentCapabilities.StatusQuery;
+    public PaymentCapabilities Capabilities =>
+        PaymentCapabilities.Refund | PaymentCapabilities.PartialRefund | PaymentCapabilities.StatusQuery | PaymentCapabilities.TransactionReport;
 
     public async Task<PaymentStartResult> StartAsync(PaymentStartRequest request, MerchantCredentials credentials, CancellationToken cancellationToken)
     {
@@ -113,8 +121,11 @@ public sealed class PayTrPaymentProvider : IPaymentProvider
         Money? amount = long.TryParse(minor, NumberStyles.Integer, CultureInfo.InvariantCulture, out long value)
             ? new Money(value, MoneyCurrency(Field(message, "currency")))
             : null;
+        // E13-14b: what the customer paid above the order's amount for instalments (total_amount is the signed one).
+        Money? fee = amount is Money order && long.TryParse(total, NumberStyles.Integer, CultureInfo.InvariantCulture, out long charged)
+            && charged > order.Minor ? new Money(charged - order.Minor, order.Currency) : null;
         return Task.FromResult(new NotificationVerification(true, orderNo, credentials.MerchantId, result, amount, null, null,
-            Field(message, "failed_reason_code"), null, null, null, NotificationAnswer));
+            Field(message, "failed_reason_code"), null, null, null, NotificationAnswer) { InstallmentFee = fee });
     }
 
     public async Task<PaymentStatusResult> QueryAsync(PaymentReference reference, MerchantCredentials credentials, CancellationToken cancellationToken)
@@ -146,7 +157,12 @@ public sealed class PayTrPaymentProvider : IPaymentProvider
         ProviderPaymentState state = refunded <= 0 ? ProviderPaymentState.Paid
             : paid is decimal total && refunded >= total ? ProviderPaymentState.Refunded
             : ProviderPaymentState.PartiallyRefunded;
-        return new PaymentStatusResult(true, state, paid is decimal amount ? Money.Of(amount, currency) : null, null, null, null, null);
+        decimal? charged = Decimal(Text(a, "payment_total"));
+        return new PaymentStatusResult(true, state, paid is decimal amount ? Money.Of(amount, currency) : null, null, null, null, null)
+        {
+            InstallmentFee = paid is decimal order && charged is decimal sum && sum > order ? Money.Of(sum - order, currency) : null,
+            Installment = int.TryParse(Text(a, "taksit"), NumberStyles.Integer, CultureInfo.InvariantCulture, out int count) && count > 1 ? count : null,
+        };
     }
 
     public Task<PaymentActionResult> CancelAsync(PaymentReference reference, MerchantCredentials credentials, CancellationToken cancellationToken) =>
@@ -170,6 +186,57 @@ public sealed class PayTrPaymentProvider : IPaymentProvider
         return Text(a, "status") == Succeeded
             ? new PaymentActionResult(true, Text(a, "reference_no") ?? orderNo, null, null)
             : PaymentActionResult.Failure(Text(a, "err_no") ?? Text(a, "status") ?? EmptyAnswerCode, Text(a, "err_msg"));
+    }
+
+    // E13-14b: "İşlem Dökümü" for one day (dev.paytr.com/islem-dokumu; not tried against PayTR: no test store). Sales and refunds;
+    // "failed" means no transactions. The docs name no list key, so the first array in the answer is read.
+    public async Task<TransactionReportResult> GetTransactionsAsync(DateOnly day, MerchantCredentials credentials, CancellationToken cancellationToken)
+    {
+        string start = day.ToString(ReportDay, CultureInfo.InvariantCulture) + DayStarts;
+        string end = day.ToString(ReportDay, CultureInfo.InvariantCulture) + DayEnds;
+        var form = new Dictionary<string, string>
+        {
+            ["merchant_id"] = credentials.MerchantId,
+            ["start_date"] = start,
+            ["end_date"] = end,
+            ["paytr_token"] = PayTrToken.ForTransactionReport(credentials.MerchantId, credentials.ApiKey, credentials.SecretKey, start, end),
+        };
+        using JsonDocument? answer = await PostAsync(_options.TransactionReportPath, form, credentials, cancellationToken);
+        if (answer is null)
+            return TransactionReportResult.Failure(ProviderBaseAddress.InvalidCode, InvalidAddressMessage);
+        JsonElement a = answer.RootElement;
+        string? status = Text(a, "status");
+        if (status == NoTransactions)
+            return TransactionReportResult.Of([]);
+        if (status != Succeeded)
+            return TransactionReportResult.Failure(Text(a, "err_no") ?? status ?? EmptyAnswerCode, Text(a, "err_msg"));
+        IEnumerable<JsonElement> rows = a.EnumerateObject().Select(p => p.Value).FirstOrDefault(v => v.ValueKind == JsonValueKind.Array) is
+            { ValueKind: JsonValueKind.Array } list
+            ? list.EnumerateArray()
+            : Text(a, "islem_tipi") is not null ? [a] : [];
+        return TransactionReportResult.Of([.. rows.Select(ReportRowOf).OfType<ProviderTransaction>()]);
+    }
+
+    private static ProviderTransaction? ReportRowOf(JsonElement row)
+    {
+        ProviderTransactionKind? kind = Text(row, "islem_tipi") switch
+        {
+            Sale => ProviderTransactionKind.Payment,
+            Return => ProviderTransactionKind.Refund,
+            _ => null,
+        };
+        if (kind is null || Decimal(Text(row, "islem_tutari")) is not decimal amount)
+            return null;
+        string currency = MoneyCurrency(Text(row, "para_birimi"));
+        bool sale = kind == ProviderTransactionKind.Payment;
+        return new ProviderTransaction(kind.Value, Text(row, "siparis_no"), null, null, Money.Of(amount, currency),
+            sale && Decimal(Text(row, "odeme_tutari")) is decimal paid ? Money.Of(paid, currency) : null,
+            sale && int.TryParse(Text(row, "taksit"), NumberStyles.Integer, CultureInfo.InvariantCulture, out int count) && count > 1 ? count : null,
+            sale && Decimal(Text(row, "kesinti_tutari")) is decimal kept ? Money.Of(kept, currency) : null,
+            sale && Decimal(Text(row, "net_tutar")) is decimal net ? Money.Of(net, currency) : null,
+            DateTime.TryParseExact(Text(row, "islem_tarihi"), ReportDayFormat, CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime at)
+                ? at
+                : null);
     }
 
     private static string[] MissingBuyerFields(PaymentBuyer buyer) =>

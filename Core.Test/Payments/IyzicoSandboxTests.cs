@@ -101,6 +101,17 @@ public class IyzicoSandboxTests
         Assert.Equal((ProviderPaymentState.Failed, "10051"), (charged.State, charged.ErrorCode));
     }
 
+    // E13-14b: the documented daily report, read from the sandbox (a day this sandbox had payments, a cancel and refunds).
+    [IyzicoSandboxFact]
+    public async Task TheDailyTransactionReport_IsRead_WithPaymentsCommissionsAndPayouts()
+    {
+        TransactionReportResult report = await Provider().GetTransactionsAsync(new DateOnly(2026, 11, 23), Sandbox(), CancellationToken.None);
+
+        Assert.True(report.Succeeded, $"{report.ErrorCode}: {report.ErrorMessage}");
+        Assert.Contains(report.Transactions, t => t.Kind == ProviderTransactionKind.Payment && t.Commission is not null && t.Payout is not null);
+        Assert.Contains(report.Transactions, t => t.Kind == ProviderTransactionKind.Refund);
+    }
+
     [IyzicoSandboxFact]
     public async Task AnUnknownOrder_IsAnErrorResult()
     {

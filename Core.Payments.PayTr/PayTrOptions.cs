@@ -11,6 +11,7 @@ public sealed class PayTrOptions
     public string GetTokenPath { get; set; } = "/odeme/api/get-token";
     public string StatusQueryPath { get; set; } = "/odeme/durum-sorgu";
     public string RefundPath { get; set; } = "/odeme/iade";
+    public string TransactionReportPath { get; set; } = "/rapor/islem-dokumu";
     public string PaymentPagePrefix { get; set; } = "https://www.paytr.com/odeme/guvenli/";
 
     /// <summary>The iFrame page of a token; the browser goes to it.</summary>

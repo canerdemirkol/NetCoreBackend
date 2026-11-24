@@ -289,6 +289,51 @@ public sealed class PaymentSimulatorTests : IDisposable
         Assert.Equal("card_not_found", renewed.ErrorCode);
     }
 
+    // E13-14b: card ending 0009 takes 3 instalments with a 10% fee when the start allows them; the order's amount stays apart.
+    private async Task<NotificationVerification> PayInInstalmentsAsync(MerchantCredentials merchant, int maxInstallment)
+    {
+        PaymentStartResult started = await _provider.StartAsync(new PaymentStartRequest($"ORD-{Guid.NewGuid():N}"[..16], Hundred, Buyer,
+            "https://app.test/api/payments/callback/simulator", "https://app.test/api/payments/return/simulator", "Pro, aylık", maxInstallment), merchant,
+            CancellationToken.None);
+        SimulatorSubmitResult submitted = await _control.SubmitCardAsync(started.ProviderToken!, Card("0009"), CancellationToken.None);
+        return await _provider.VerifyNotificationAsync(new IncomingPaymentMessage(submitted.ReturnFields, new Dictionary<string, string>()), merchant,
+            CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ACardEndingIn0009_PaysInThreeInstalments_WithAFee_WhenAllowed()
+    {
+        MerchantCredentials merchant = Merchant();
+
+        NotificationVerification allowed = await PayInInstalmentsAsync(merchant, maxInstallment: 6);
+        NotificationVerification single = await PayInInstalmentsAsync(merchant, maxInstallment: 1);
+
+        Assert.True(allowed.SignatureValid);
+        Assert.Equal((PaymentResultKind.Paid, Hundred, Money.Of(10m), 3), (allowed.Result!.Value, allowed.Amount!.Value, allowed.InstallmentFee!.Value, allowed.Installment!.Value));
+        Assert.Equal((PaymentResultKind.Paid, Hundred, 1), (single.Result!.Value, single.Amount!.Value, single.Installment!.Value));
+        Assert.Null(single.InstallmentFee);
+    }
+
+    [Fact]
+    public async Task TheDailyReport_HasTodaysPayments_AndCancels()
+    {
+        MerchantCredentials merchant = Merchant();
+        (string paid, string paidToken) = await StartAsync(merchant);
+        (string cancelled, string cancelledToken) = await StartAsync(merchant);
+        await _control.SubmitCardAsync(paidToken, Card("0000"), CancellationToken.None);
+        await _control.SubmitCardAsync(cancelledToken, Card("0000"), CancellationToken.None);
+        await _provider.CancelAsync(new PaymentReference(cancelled, null, null), merchant, CancellationToken.None);
+
+        TransactionReportResult report = await ((ITransactionReportProvider)_provider).GetTransactionsAsync(
+            DateOnly.FromDateTime(DateTime.UtcNow.AddHours(3)), merchant, CancellationToken.None);
+
+        Assert.True(report.Succeeded);
+        Assert.True(_provider.Capabilities.HasFlag(PaymentCapabilities.TransactionReport));
+        Assert.Contains(report.Transactions, t => t.Kind == ProviderTransactionKind.Payment && t.OrderNo == paid && t.Amount == Hundred && t.Payout is not null);
+        Assert.Contains(report.Transactions, t => t.Kind == ProviderTransactionKind.Payment && t.OrderNo == cancelled);
+        Assert.Contains(report.Transactions, t => t.Kind == ProviderTransactionKind.Cancel && t.OrderNo == cancelled && t.Amount == Hundred);
+    }
+
     [Fact]
     public async Task TheStatus_IsPendingUntilPaid_ThenPaid()
     {

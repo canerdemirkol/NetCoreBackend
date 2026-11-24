@@ -209,6 +209,65 @@ public class PayTrPaymentProviderTests
 
         Assert.Equal(PayTrPaymentProvider.NotSupportedCode, cancel.ErrorCode);
         Assert.Empty(http.Requests);
-        Assert.Equal(PaymentCapabilities.Refund | PaymentCapabilities.PartialRefund | PaymentCapabilities.StatusQuery, provider.Capabilities);
+        Assert.Equal(PaymentCapabilities.Refund | PaymentCapabilities.PartialRefund | PaymentCapabilities.StatusQuery | PaymentCapabilities.TransactionReport, provider.Capabilities);
+    }
+
+    // E13-14b: the instalment fee is what the customer paid above the order's amount (total_amount is signed; payment_amount is the order's).
+    [Fact]
+    public async Task AnInstalmentNotification_KeepsTheFeeApart()
+    {
+        (PayTrPaymentProvider provider, _) = Provider();
+
+        NotificationVerification verified = await provider.VerifyNotificationAsync(Notification("success", "10350"), TestStore, CancellationToken.None);
+
+        Assert.Equal((Amount, Money.Of(3m)), (verified.Amount, verified.InstallmentFee));
+    }
+
+    [Fact]
+    public async Task TheStatusQuery_GivesTheFee_AndTheInstalments()
+    {
+        (PayTrPaymentProvider provider, _) = Provider(
+            """{"status":"success","payment_amount":"100.50","payment_total":"103.50","currency":"TL","taksit":"3","returns":[]}""");
+
+        PaymentStatusResult status = await provider.QueryAsync(new PaymentReference(OrderNo, null, null), TestStore, CancellationToken.None);
+
+        Assert.Equal((Amount, Money.Of(3m), 3), (status.Amount, status.InstallmentFee, status.Installment));
+    }
+
+    // E13-14b: the daily "İşlem Dökümü" (sales and refunds), per the docs (not tried against PayTR: no test store).
+    [Fact]
+    public async Task TheDailyReport_AsksForTheWholeDay_WithItsToken_AndReadsSalesAndRefunds()
+    {
+        (PayTrPaymentProvider provider, RecordingHttpHandler http) = Provider(
+            """{"status":"success","list":[{"islem_tipi":"S","net_tutar":"98.14","kesinti_tutari":"2.36","kesinti_orani":"2.35","islem_tutari":"100.50","odeme_tutari":"103.50","islem_tarihi":"24.11.2026","para_birimi":"TL","taksit":"3","siparis_no":"PO20261123A7K3Q9","odeme_tipi":"KART"},{"islem_tipi":"I","islem_tutari":"40.00","odeme_tutari":"40.00","islem_tarihi":"24.11.2026","para_birimi":"TL","taksit":"0","siparis_no":"PO20261123A7K3Q9"}]}""");
+
+        TransactionReportResult report = await provider.GetTransactionsAsync(new DateOnly(2026, 11, 24), TestStore, CancellationToken.None);
+
+        var call = http.Requests.Single();
+        var form = Form(call.Body);
+        Assert.Equal("https://www.paytr.com/rapor/islem-dokumu", call.Uri.ToString());
+        Assert.Equal(("123456", "2026-11-24 00:00:00", "2026-11-24 23:59:59"), (form["merchant_id"], form["start_date"], form["end_date"]));
+        Assert.Equal(PayTrToken.ForTransactionReport("123456", "key-1", "salt-1", "2026-11-24 00:00:00", "2026-11-24 23:59:59"), form["paytr_token"]);
+        Assert.True(report.Succeeded);
+        Assert.True(provider.Capabilities.HasFlag(PaymentCapabilities.TransactionReport));
+        ProviderTransaction sale = report.Transactions[0];
+        Assert.Equal((ProviderTransactionKind.Payment, OrderNo, Amount, Money.Of(103.5m), 3, Money.Of(2.36m), Money.Of(98.14m)),
+            (sale.Kind, sale.OrderNo, sale.Amount, sale.Charged, sale.Installment, sale.Commission, sale.Payout));
+        Assert.Equal(new DateTime(2026, 11, 24), sale.ProviderLocalTime);
+        Assert.Equal((ProviderTransactionKind.Refund, Money.Of(40m), (int?)null), (report.Transactions[1].Kind, report.Transactions[1].Amount,
+            report.Transactions[1].Installment));
+    }
+
+    [Fact]
+    public async Task ADayWithoutTransactions_IsAnEmptyReport_AndAnErrorIsAResult()
+    {
+        (PayTrPaymentProvider provider, _) = Provider("""{"status":"failed"}""", """{"status":"error","err_no":"001","err_msg":"token"}""");
+
+        TransactionReportResult empty = await provider.GetTransactionsAsync(new DateOnly(2026, 11, 24), TestStore, CancellationToken.None);
+        TransactionReportResult error = await provider.GetTransactionsAsync(new DateOnly(2026, 11, 24), TestStore, CancellationToken.None);
+
+        Assert.True(empty.Succeeded);
+        Assert.Empty(empty.Transactions);
+        Assert.Equal((false, "001"), (error.Succeeded, error.ErrorCode));
     }
 }

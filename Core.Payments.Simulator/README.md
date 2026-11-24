@@ -9,6 +9,8 @@ A payment provider for development and tests. **Never for production:** register
 - Magic card endings: `0000` paid, `0002` declined, `0003` 3D failed, `0004` notification with another amount, `0005` notification held
   back, `0006` notification sent twice, `0007` tampered signature, `0008` paid but declined when charged again as a stored card; any
   other ending fails.
+- Instalments: card ending `0009` pays in 3 instalments with a 10% fee when the start allows 3 or more (`installment_fee`, signed).
+- `ITransactionReportProvider`: the day's payments (3% commission kept), cancels and refunds, the day in Turkey time.
 - Stored cards (`IStoredCardPaymentProvider`): a payment started with `StoreCard` keeps the card; charges and deletes go through the
   gateway like any call. Cards live in memory and are lost when the process ends.
 - `ISimulatorControl`: render the payment page, submit a card, send a held notification (or twice, or tampered), close the day (cancel
