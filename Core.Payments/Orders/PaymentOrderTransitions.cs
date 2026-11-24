@@ -24,7 +24,8 @@ public static class PaymentOrderTransitions
             PaymentOrderStatus.Paid, PaymentOrderStatus.Cancelled, PaymentOrderStatus.PartiallyRefunded, PaymentOrderStatus.Refunded,
             PaymentOrderStatus.Failed,
         ],
-        [PaymentOrderStatus.Disputed] = [PaymentOrderStatus.Paid, PaymentOrderStatus.Refunded],
+        // A dispute won goes back to where it was (paid, or partly refunded); lost, the bank took the rest back.
+        [PaymentOrderStatus.Disputed] = [PaymentOrderStatus.Paid, PaymentOrderStatus.PartiallyRefunded, PaymentOrderStatus.Refunded],
         [PaymentOrderStatus.Cancelled] = [],
         [PaymentOrderStatus.Refunded] = [],
     };

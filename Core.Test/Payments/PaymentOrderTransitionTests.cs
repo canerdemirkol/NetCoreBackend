@@ -20,6 +20,10 @@ public class PaymentOrderTransitionTests
     [InlineData(PaymentOrderStatus.Paid, PaymentOrderStatus.PartiallyRefunded, true)]
     [InlineData(PaymentOrderStatus.PartiallyRefunded, PaymentOrderStatus.Refunded, true)]
     [InlineData(PaymentOrderStatus.Paid, PaymentOrderStatus.Disputed, true)]
+    [InlineData(PaymentOrderStatus.PartiallyRefunded, PaymentOrderStatus.Disputed, true)]
+    [InlineData(PaymentOrderStatus.Disputed, PaymentOrderStatus.Paid, true)]               // a dispute won
+    [InlineData(PaymentOrderStatus.Disputed, PaymentOrderStatus.PartiallyRefunded, true)]  // won, after a partial refund
+    [InlineData(PaymentOrderStatus.Disputed, PaymentOrderStatus.Refunded, true)]           // lost
     [InlineData(PaymentOrderStatus.Review, PaymentOrderStatus.Paid, true)]
     [InlineData(PaymentOrderStatus.Paid, PaymentOrderStatus.Pending, false)]
     [InlineData(PaymentOrderStatus.Refunded, PaymentOrderStatus.Paid, false)]

@@ -7,6 +7,17 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [2026-11-24]
+
+### Core.Payments 1.0.0-preview.7 — a dispute won after a partial refund
+
+#### Changed
+
+- `PaymentOrderTransitions`: `Disputed → PartiallyRefunded` is allowed, so a card dispute won on a partly refunded order goes back to where it
+  was (it could only go back to `Paid`). Test: `PaymentOrderTransitionTests` (4 cases).
+
+---
+
 ## [2026-11-23] (3)
 
 ### Core.Payments.Simulator 1.0.0-preview.6 — the stored card's keys are starred in the log
